@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SISTEMA PSA · Telemetría de Flota</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<style>
+  :root{
+    /* ===== TEMA OSCURO (Home y dashboard, después del login) ===== */
+    --bg-void:#232427; --bg-panel:#2C2D30; --bg-raised:#38393D;
+    --line:#454649; --line-bright:#5A5B5F;
+    --text-primary:#FFFFFF; --text-secondary:#F5F5F6; --text-dim:#C7C7CA;
+    --brand:#CC0000; --brand-dim:#CC000022; --brand-glow:#CC000055;
+    --ok:#2DD9A0; --warn:#FFB020; --crit:#FF3B3B;
+    --radius:6px;
+    /* ===== NAVISAF (login/entrada, y ahora color de interacción de todo el sistema) ===== */
+    --nav-dark:#182F57; --nav-mid:#26497E; --nav-light:#5FACE0; --nav-dim:#5FACE022;
+    --accent:#5FACE0; --accent-dim:#5FACE022;
+    /* ===== Acentos por categoría (ninguno rojo — el rojo queda solo para alertas) ===== */
+    --cat-motor:#5FACE0; --cat-operacion:#34C795; --cat-seguridad:#FFB020;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:var(--bg-void); color:var(--text-primary);
+    font-family:'IBM Plex Sans',sans-serif; min-height:100vh; overflow-x:hidden;
+    transition:background .25s,color .25s;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  /* ===== BOOT INTRO ===== */
+  #boot{
+    position:fixed;inset:0;background:#050506;z-index:9999;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;
+    transition:opacity .5s, visibility .5s;
+  }
+  #boot.hide{opacity:0;visibility:hidden;pointer-events:none;}
+  .boot-logo{font-family:'IBM Plex Mono';font-weight:700;font-size:15px;letter-spacing:.3em;color:var(--nav-light);}
+  .boot-spinner{width:52px;height:52px;border-radius:50%;border:3px solid #ffffff14;border-top-color:var(--nav-light);animation:spin 0.9s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .boot-progress{width:220px;height:2px;background:#232326;border-radius:2px;overflow:hidden;}
+  .boot-progress-fill{height:100%;width:0%;background:var(--nav-light);transition:width .3s;}
+
+  /* ===== THEME TOGGLE ===== */
+  .theme-toggle{
+    display:flex;align-items:center;gap:6px;background:var(--bg-raised);border:1px solid var(--line);
+    border-radius:20px;padding:3px;cursor:pointer;
+  }
+  .theme-toggle .opt{padding:5px 11px;font-size:10px;font-family:'IBM Plex Mono';border-radius:16px;color:var(--text-dim);letter-spacing:.05em;}
+  .theme-toggle .opt.active{background:var(--brand);color:#fff;}
+
+  /* ===== TOP BAR ===== */
+  .topbar{
+    display:flex; align-items:center; gap:20px; padding:12px 24px; border-bottom:1px solid var(--line);
+    background:var(--bg-panel); position:sticky; top:0; z-index:100;
+  }
+  .brand-block{display:flex;align-items:center;gap:12px;}
+  .logo-slot{
+    width:38px;height:38px;border-radius:4px;background:var(--brand);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;
+  }
+  .logo-slot img{width:100%;height:100%;object-fit:contain;}
+  .logo-slot .fallback{color:#fff;font-family:'IBM Plex Mono';font-weight:700;font-size:16px;}
+  .brand-text .name{font-family:'IBM Plex Mono';font-weight:700;font-size:14px;letter-spacing:.08em;}
+  .brand-text .sub{color:var(--text-dim);font-size:10px;letter-spacing:.08em;margin-top:1px;}
+  .topbar-stats{display:flex;gap:26px;margin-left:auto;align-items:center;}
+  .stat-chip{display:flex;flex-direction:column;align-items:flex-end;}
+  .stat-chip .val{font-family:'IBM Plex Mono';font-weight:600;font-size:16px;}
+  .stat-chip .lbl{font-size:10px;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;}
+  .stat-chip.alert .val{color:var(--brand);}
+  .unit-switcher{
+    background:var(--bg-raised); border:1px solid var(--line); border-radius:var(--radius);
+    padding:8px 14px; display:flex; align-items:center; gap:10px;
+  }
+  .unit-switcher select{background:transparent;border:none;color:var(--text-primary);font-family:'IBM Plex Mono';font-weight:600;font-size:13px;cursor:pointer;outline:none;}
+  .unit-switcher select option{background:var(--bg-panel);color:var(--text-primary);}
+
+  /* ===== LAYOUT ===== */
+  .layout{display:grid;grid-template-columns:180px 1fr;min-height:calc(100vh - 61px);}
+  .sidenav{border-right:1px solid var(--line);padding:20px 0;background:var(--bg-panel);}
+  .nav-item{display:flex;align-items:center;gap:12px;padding:13px 22px;color:var(--text-secondary);cursor:pointer;font-size:13px;font-weight:500;letter-spacing:.03em;border-left:2px solid transparent;transition:all .15s;}
+  .nav-item:hover{color:var(--text-primary);background:var(--bg-raised);}
+  .nav-item.active{color:var(--text-primary);border-left-color:var(--accent);background:var(--accent-dim);}
+  .nav-icon-badge{width:26px;height:26px;border-radius:6px;background:#EFEFEF;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .nav-icon{width:18px;height:18px;object-fit:contain;}
+  .nav-divider{height:1px;background:var(--line);margin:14px 22px;}
+  .nav-label{padding:0 22px 6px;font-size:10px;color:var(--text-dim);letter-spacing:.1em;}
+  .subnav{margin-bottom:6px;}
+  .subnav-item{
+    padding:9px 22px 9px 46px; font-size:12px; color:var(--text-dim); cursor:pointer;
+    border-left:2px solid transparent; transition:all .15s;
+  }
+  .subnav-item:hover{color:var(--text-secondary);}
+  .subnav-item.active{color:var(--text-primary);background:var(--brand-dim);}
+  .subnav-item.disabled{cursor:default;opacity:.5;}
+  .subnav-item.disabled:hover{color:var(--text-dim);}
+  .soon{font-size:8px;color:var(--text-dim);border:1px solid var(--line);border-radius:3px;padding:1px 4px;margin-left:4px;letter-spacing:.03em;}
+
+  .main{padding:22px 26px 0;}
+  .section-title{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+  .section-title h1{font-size:19px;font-weight:600;}
+  .section-title .placa{font-family:'IBM Plex Mono';color:#fff;font-size:13px;background:#000000CC;border:1px solid var(--line-bright);padding:3px 10px;border-radius:4px;}
+
+  /* ===== MIN/PROM/MAX TOGGLE ===== */
+  .metric-toggle{display:flex;gap:2px;background:var(--bg-raised);border:1px solid var(--line);border-radius:6px;padding:2px;margin-left:auto;}
+  .metric-toggle .m-opt{padding:5px 13px;font-size:11px;font-family:'IBM Plex Mono';border-radius:4px;color:var(--text-dim);cursor:pointer;letter-spacing:.05em;}
+  .metric-toggle .m-opt.active{background:var(--accent);color:#fff;}
+
+  /* ===== GAUGES GRID (ahora dinámico) ===== */
+  .gauges-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px;}
+  .gauge-card{background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 10px 8px;text-align:center;}
+  .gauge-card .gtitle{font-size:11px;color:var(--text-secondary);letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;}
+  .gauge-chart{width:100%;height:128px;}
+
+  .row2{display:grid;grid-template-columns:2.2fr 1fr;gap:14px;margin-bottom:20px;}
+  .panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;}
+  .panel-title{display:flex;align-items:center;font-size:12px;color:var(--text-secondary);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;}
+  .trend-chart{width:100%;height:220px;}
+  .kpi-list{display:flex;flex-direction:column;gap:12px;}
+  .kpi-row{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--line);}
+  .kpi-row:last-child{border:none;padding-bottom:0;}
+  .kpi-row .k-lbl{font-size:12px;color:var(--text-secondary);}
+  .kpi-row .k-val{font-family:'IBM Plex Mono';font-weight:600;font-size:15px;}
+  .k-val.warn{color:var(--warn);} .k-val.ok{color:var(--ok);} .k-val.crit{color:var(--crit);}
+
+  /* ===== NAVEGACIÓN TEMPORAL SIMPLIFICADA ===== */
+  .datenav-panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:16px;padding:14px 18px;}
+  .datenav-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .dn-select{background:var(--bg-raised);border:1px solid var(--line);color:var(--text-primary);font-family:'IBM Plex Mono';font-size:12px;padding:7px 10px;border-radius:5px;cursor:pointer;}
+  .dn-btn{background:transparent;border:1px solid var(--line);color:var(--text-secondary);font-family:'IBM Plex Mono';font-size:11px;padding:7px 12px;border-radius:5px;cursor:pointer;}
+  .dn-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .day-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:5px;margin-top:12px;}
+  .day-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono';font-size:11px;border-radius:4px;cursor:pointer;color:var(--text-dim);background:var(--bg-raised);border:1px solid transparent;}
+  .day-cell.has-data{color:var(--text-secondary);border-color:var(--line);}
+  .day-cell.has-data:hover{border-color:var(--accent);color:var(--text-primary);}
+  .day-cell.selected{background:var(--accent);color:#fff;}
+  .day-cell.empty{visibility:hidden;}
+
+  /* ===== TICKER ===== */
+  .ticker-wrap{background:var(--bg-panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:9px 0;overflow:hidden;position:relative;}
+  .ticker-label{position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;background:var(--brand);color:#fff;padding:0 14px;font-family:'IBM Plex Mono';font-weight:700;font-size:10px;letter-spacing:.06em;z-index:2;}
+  .ticker-track{display:flex;white-space:nowrap;animation:scroll-left 40s linear infinite;padding-left:150px;}
+  @keyframes scroll-left{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+  .ticker-item{display:inline-flex;align-items:center;gap:8px;padding:0 26px;font-size:12px;color:var(--text-secondary);border-right:1px solid var(--line);}
+  .ticker-item .t-dot{width:6px;height:6px;border-radius:50%;background:var(--warn);}
+  .ticker-item .t-code{font-family:'IBM Plex Mono';color:var(--text-primary);}
+  .footer-note{text-align:center;color:var(--text-dim);font-size:10px;padding:14px;letter-spacing:.05em;}
+
+  /* ===== LOGIN SCREEN ===== */
+  .login-card{
+    background:linear-gradient(160deg, var(--nav-dark), var(--nav-mid));
+    border:1px solid var(--nav-light);border-radius:10px;
+    padding:36px 34px;width:320px;text-align:center;
+  }
+  .login-card-overlay{
+    position:absolute; bottom:36px; right:36px; z-index:10;
+    box-shadow:0 12px 40px #000000aa, 0 0 0 1px var(--nav-dim);
+  }
+  .login-brand{width:52px;height:52px;border-radius:8px;background:var(--nav-light);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;color:#0A1930;font-family:'IBM Plex Mono';font-weight:700;font-size:20px;overflow:hidden;}
+  .login-brand img{width:100%;height:100%;object-fit:contain;}
+  .login-title{font-size:15px;font-weight:600;margin-bottom:2px;color:#fff;}
+  .login-sub{font-size:11px;color:var(--nav-light);letter-spacing:.06em;margin-bottom:24px;}
+  .login-field{margin-bottom:14px;text-align:left;}
+  .login-field label{font-size:10px;color:#ffffff99;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px;}
+  .login-field input{
+    width:100%;background:#ffffff14;border:1px solid #ffffff33;color:#fff;
+    padding:10px 12px;border-radius:5px;font-family:'IBM Plex Mono';font-size:13px;outline:none;
+  }
+  .login-field input::placeholder{color:#ffffff55;}
+  .login-field input:focus{border-color:var(--nav-light);}
+  .login-btn{
+    width:100%;background:var(--nav-light);color:#0A1930;border:none;padding:11px;border-radius:5px;
+    font-family:'IBM Plex Sans';font-weight:700;font-size:13px;cursor:pointer;margin-top:6px;transition:opacity .15s;
+  }
+  .login-btn:hover{opacity:.88;}
+  .login-error{color:#FF8080;font-size:11px;margin-top:10px;height:14px;}
+
+  /* ===== FONDO DE MARCA (Cummins) — Home y App, después del login ===== */
+  .brand-bg{
+    position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background-image:linear-gradient(180deg, #00000099, #000000CC), var(--brand-bg-url, none);
+    background-size:cover; background-position:center;
+  }
+
+  /* ===== HOME SCREEN ===== */
+  #screenHome{position:fixed;inset:0;background:transparent;display:none;z-index:400;overflow:hidden;}
+  #screenHome.show{display:block;}
+  .home-hero{
+    position:relative; overflow:hidden; display:flex; min-height:230px;
+    background:var(--bg-panel); border-bottom:2px solid var(--accent);
+  }
+  .hero-media{
+    width:44%; min-width:260px; position:relative; overflow:hidden;
+    background-image:linear-gradient(90deg, transparent 55%, var(--bg-panel) 100%), var(--brand-bg-url, none);
+    background-size:cover; background-position:center;
+  }
+  .hero-media::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg, transparent 35%, var(--bg-panel) 100%);}
+  .hero-content{flex:1; display:flex; flex-direction:column; justify-content:center; align-items:flex-start; padding:26px 20px 26px 28px; text-align:left;}
+  .home-hero-title h1{font-size:24px;font-weight:700;letter-spacing:.01em;}
+  .home-hero-title .sub{font-size:11px;color:var(--text-dim);letter-spacing:.12em;margin-top:6px;text-transform:uppercase;text-align:center;}
+
+  .home-body{padding:26px 40px 40px;max-width:1200px;margin:0 auto;}
+  .cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+  .cat-panel{
+    background:var(--bg-panel);border:1px solid var(--line);border-left:4px solid var(--cat-color, var(--accent));border-radius:8px;padding:20px;
+    cursor:pointer;transition:box-shadow .15s, transform .15s, background .15s;box-shadow:0 1px 3px #00000010;
+  }
+  .cat-panel:hover{box-shadow:0 8px 22px #00000030;transform:translateY(-2px);background:var(--bg-raised);}
+  .cat-panel-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line);}
+  .cat-panel-head .icon-badge{width:42px;height:42px;border-radius:8px;background:#EFEFEF;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .cat-panel-head .icon{width:28px;height:28px;object-fit:contain;}
+  .cat-panel-head h2{font-size:15px;font-weight:600;letter-spacing:.03em;}
+  .indicator-chip{
+    display:flex;justify-content:space-between;align-items:center;padding:9px 10px;margin:0 -10px;
+    border-bottom:1px solid var(--line); font-size:12.5px; color:var(--text-secondary);
+    border-radius:5px; transition:background .12s, color .12s;
+  }
+  .indicator-chip:last-child{border-bottom:none;}
+  .indicator-chip:hover{color:var(--text-primary);background:var(--bg-void);}
+  .indicator-chip.disabled:hover{background:transparent;color:var(--text-dim);}
+  .indicator-chip .arrow{color:var(--text-dim);}
+  .home-footer{text-align:center;margin-top:24px;color:var(--text-dim);font-size:10px;letter-spacing:.05em;}
+</style>
+</head>
+<body>
+
+<div id="boot">
+  <div class="boot-logo">CARGANDO SISTEMA</div>
+  <div class="boot-spinner"></div>
+  <div class="boot-progress"><div class="boot-progress-fill" id="bootFill"></div></div>
+</div>
+
+<!-- ===== LOGIN ===== -->
+<!-- ===== VIDEO INTRO + LOGIN SOBREPUESTO ===== -->
+<div id="screenVideoIntro" style="position:fixed;inset:0;background:#000;z-index:450;display:none;">
+  <video id="videoIntro" style="width:100%;height:100%;object-fit:cover;" playsinline loop muted autoplay>
+    <source src="navisafintro.mp4" type="video/mp4">
+  </video>
+  
+
+  <div class="login-card login-card-overlay" id="loginCard">
+    <div class="login-brand" id="loginLogoSlot">C</div>
+    <div class="login-title">CUMMINS · NAVISAF</div>
+    <div class="login-sub">— ACCESO AL SISTEMA —</div>
+    <div class="login-field"><label>Usuario</label><input type="text" id="loginUser" placeholder="usuario"></div>
+    <div class="login-field"><label>Contraseña</label>
+      <div style="position:relative;">
+        <input type="password" id="loginPass" placeholder="••••••••" style="padding-right:38px;">
+        <span id="togglePass" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;user-select:none;display:flex;">
+          <svg id="eyeOpen" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffffffaa" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg id="eyeClosed" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffffffaa" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a21.8 21.8 0 015.06-6.06M9.9 4.24A10.94 10.94 0 0112 4c7 0 11 7 11 7a21.7 21.7 0 01-2.16 3.19M14.12 14.12a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </span>
+      </div>
+    </div>
+    <button class="login-btn" id="loginBtn">INGRESAR</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+
+  <button id="btnSkipVideo" style="position:absolute;top:26px;right:26px;background:#00000099;border:1px solid #ffffff33;color:#fff;padding:8px 16px;border-radius:20px;font-family:'IBM Plex Mono';font-size:11px;cursor:pointer;">Detener video ▸</button>
+  <button id="btnMuteVideo" style="position:absolute;top:26px;left:26px;background:#00000099;border:1px solid #ffffff33;color:#fff;padding:9px 16px;border-radius:20px;font-family:'IBM Plex Mono';font-size:11px;cursor:pointer;">🔇 Activar sonido</button>
+</div>
+
+<!-- ===== HOME ===== -->
+<div id="screenHome">
+  <div class="home-hero">
+    <div class="hero-media"></div>
+    <div class="hero-content">
+      <div class="home-hero-title">
+        <h1>CLIENTE: PSA — COMPORTAMIENTO DE FLOTA</h1>
+        <div class="sub">— CUMMINS · TELEMETRÍA NAVISAF —</div>
+      </div>
+    </div>
+  </div>
+  <div class="home-body">
+    <div class="cat-grid" id="catGrid"></div>
+    <div class="home-footer">Selecciona una categoría o un indicador específico para ver el detalle</div>
+  </div>
+</div>
+
+<div id="screenApp" style="display:none;">
+  <div class="brand-bg" id="bgApp"></div>
+<div class="topbar">
+  <div class="dn-btn" id="btnVolverHome" style="margin-right:4px;cursor:pointer;">← Inicio</div>
+  <div class="brand-block">
+    <div class="brand-text">
+      <div class="name">CUMMINS: CLIENTE PSA</div>
+      <div class="sub">TELEMETRÍA DE FLOTA - CUMMINS NAVISAF</div>
+    </div>
+  </div>
+  <div class="unit-switcher"><span class="mono" style="font-size:11px;color:var(--text-dim);">UNIDAD</span><select id="unitSelect"></select></div>
+  <div class="topbar-stats">
+    <div class="stat-chip"><span class="val mono" id="statTotal">--</span><span class="lbl">Unidades</span></div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidenav">
+    <div class="nav-label">CATEGORÍAS</div>
+
+    <div class="nav-item active" data-cat="motor"><span class="nav-icon-badge"><img class="nav-icon" src="iconmotor.png" alt="Motor"></span> MOTOR</div>
+    <div class="subnav" id="subnav-motor">
+      <div class="subnav-item active" data-cat="motor" data-sub="variables">Variables de Motor</div>
+      <div class="subnav-item" data-cat="motor" data-sub="consumo">Galones Consumidos y Horas Motor</div>
+      <div class="subnav-item disabled" data-cat="motor" data-sub="encendidos">Encendidos <span class="soon">próx.</span></div>
+    </div>
+
+    <div class="nav-item" data-cat="operacion"><span class="nav-icon-badge"><img class="nav-icon" src="iconoperacion.png" alt="Operación"></span> OPERACIÓN</div>
+    <div class="subnav" id="subnav-operacion">
+      <div class="subnav-item active" data-cat="operacion" data-sub="rendimientos">Rendimientos</div>
+      <div class="subnav-item" data-cat="operacion" data-sub="uso_flota">Uso de Flota</div>
+    </div>
+
+    <div class="nav-item" data-cat="seguridad"><span class="nav-icon-badge"><img class="nav-icon" src="iconseguridad.png" alt="Seguridad"></span> SEGURIDAD</div>
+    <div class="subnav" id="subnav-seguridad">
+      <div class="subnav-item active" data-cat="seguridad" data-sub="fallas">Fallas</div>
+      <div class="subnav-item disabled" data-cat="seguridad" data-sub="acelerometro">Acelerómetro <span class="soon">próx.</span></div>
+      <div class="subnav-item disabled" data-cat="seguridad" data-sub="velocidad">Exceso de Velocidad <span class="soon">próx.</span></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="section-title">
+      <h1 id="catTitle">Motor</h1>
+      <span class="placa mono" id="placaLabel">—</span>
+      <div class="metric-toggle" id="metricToggle">
+        <div class="m-opt" data-m="min">MIN</div>
+        <div class="m-opt active" data-m="prom">PROM</div>
+        <div class="m-opt" data-m="max">MAX</div>
+      </div>
+    </div>
+
+    <!-- NAV TEMPORAL -->
+    <div class="datenav-panel">
+      <div class="datenav-row">
+        <select class="dn-select" id="selAnio"></select>
+        <select class="dn-select" id="selMes"></select>
+        <select class="dn-select" id="selDia"></select>
+        <span class="mono" style="font-size:11px;color:var(--text-dim);margin-left:auto;" id="selInfo">—</span>
+      </div>
+    </div>
+
+    <div id="viewMotor">
+      <div id="subViewVariables">
+        <div class="gauges-grid" id="gaugesGrid"></div>
+        <div class="row2">
+          <div class="panel"><div class="panel-title">Tendencia diaria del período</div><div class="trend-chart" id="trendMotor"></div></div>
+          <div class="panel"><div class="panel-title">Lecturas del período</div><div class="kpi-list" id="kpiMotor"></div></div>
+        </div>
+      </div>
+      <div id="subViewConsumo" style="display:none;">
+        <div class="row2" style="grid-template-columns:1fr;">
+          <div class="panel"><div class="panel-title">Galones consumidos por día</div><div class="trend-chart" id="trendGalones" style="height:220px;"></div></div>
+        </div>
+        <div class="row2">
+          <div class="panel"><div class="panel-title">Consumo del período</div><div class="kpi-list" id="kpiConsumo"></div></div>
+          <div class="panel"><div class="panel-title">Horas motor</div><div class="kpi-list" id="kpiHorasMotor"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="viewOperacion" style="display:none;">
+      <div class="row2" style="grid-template-columns:1fr;">
+        <div class="panel"><div class="panel-title">Horas motor acumuladas</div><div class="trend-chart" id="trendOperacion" style="height:260px;"></div></div>
+      </div>
+      <div class="row2">
+        <div class="panel"><div class="panel-title">Consumo del período</div><div class="kpi-list" id="kpiOperacion"></div></div>
+        <div class="panel"><div class="panel-title">Eficiencia</div><div class="kpi-list" id="kpiEficiencia"></div></div>
+      </div>
+    </div>
+
+    <div id="viewSeguridad" style="display:none;">
+      <div class="panel"><div class="panel-title">Fallas del período seleccionado</div><table style="width:100%;border-collapse:collapse;font-size:12px;" id="tablaFallas"></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="ticker-wrap">
+  <div class="ticker-label">◉ FALLAS RECIENTES</div>
+  <div class="ticker-track" id="tickerTrack"></div>
+</div>
+<div class="footer-note">Prototipo con datos de ejemplo · Coloca tu logo oficial en CONFIG.NAVISAF_LOGO_URL · Conectar CONFIG.API_URL cuando esté publicada la API</div>
+</div><!-- /screenApp -->
+
+<script>
+const CONFIG = {
+  API_URL:"PENDIENTE_DE_PUBLICAR", USAR_DATOS_DEMO:true, LOGO_URL:null, /* ej: "logo-cummins.png" */
+  NAVISAF_LOGO_URL:"navisaflogo.png",
+  USAR_LOGIN_DEMO:true, DEMO_USUARIO:"admin", DEMO_CLAVE:"psa2026",
+  CLIENT_BG_URL:"cumminsbg.jpg" // fondo de marca del cliente, Home y App
+  // En producción: fetch(CONFIG.API_URL + "?accion=login&usuario="+u+"&clave="+p) devuelve {ok:true/false}
+};
+
+/* ===== INDICADORES DE LA PANTALLA PRINCIPAL (mismo patrón config que GAUGES_CONFIG) ===== */
+const HOME_CATEGORIAS = [
+  { cat:"motor", icon:"iconmotor.png", label:"MOTOR", items:[
+    {label:"Variables de Motor", sub:"variables"},
+    {label:"Galones Consumidos y Horas Motor", sub:"consumo"},
+    {label:"Encendidos", sub:"encendidos", disabled:true}
+  ]},
+  { cat:"operacion", icon:"iconoperacion.png", label:"OPERACIÓN", items:[
+    {label:"Rendimientos", sub:"rendimientos"},
+    {label:"Uso de Flota", sub:"uso_flota"}
+  ]},
+  { cat:"seguridad", icon:"iconseguridad.png", label:"SEGURIDAD", items:[
+    {label:"Fallas", sub:"fallas"},
+    {label:"Acelerómetro", sub:"acelerometro", disabled:true},
+    {label:"Exceso de Velocidad", sub:"velocidad", disabled:true}
+  ]}
+];
+
+/* ===== GAUGES CONFIGURABLES: agregar un módulo nuevo = agregar una línea acá ===== */
+const GAUGES_CONFIG = [
+  { id:"rpm",      label:"RPM",                    min:0, max:2500, unidad:"",  color:"var(--accent)" },
+  { id:"oil",      label:"Presión Aceite (PSI)",    min:0, max:90,   unidad:"",  color:"var(--ok)" },
+  { id:"coolant",  label:"Refrigerante (°C)",       min:0, max:110,  unidad:"°", color:"var(--warn)" },
+  { id:"carga",    label:"Carga Motor (%)",         min:0, max:100,  unidad:"%", color:"var(--accent)" },
+  { id:"manifold", label:"Presión Admisión (PSI)",  min:0, max:10,   unidad:"",  color:"var(--ok)" }
+  // ↓ ejemplo de cómo se vería agregar un módulo nuevo (ej. DEF):
+  // { id:"def", label:"Nivel DEF (%)", min:0, max:100, unidad:"%", color:"var(--warn)" },
+];
+
+function seedRandom(seed){ return function(){ seed=(seed*9301+49297)%233280; return seed/233280; }; }
+
+function generarDatosDemo(){
+  const unidades=["ALIOT 1","ALIOT 2","ALIOT 3","PSA-07","PSA-12"];
+  const dataPorUnidad={};
+  const falasCodigos=[["P0087","Baja presión de riel de combustible","ECM"],["P0128","Termostato de refrigerante","Coolant"],
+    ["P0521","Circuito de presión de aceite","ECM"],["P2263","Turbo / rendimiento sobrealimentador","Manifold"],["P0524","Presión de aceite muy baja","ECM"]];
+  unidades.forEach((placa,uIdx)=>{
+    const rnd=seedRandom(1000+uIdx*77);
+    const dias=[]; const fechaInicio=new Date(2026,0,1);
+    for(let i=0;i<227;i++){ dias.push(new Date(fechaInicio.getTime()+i*86400000)); }
+    let odomCum=45000+uIdx*3000, fuelCum=8000+uIdx*500, fuelIdleCum=1200, horasCum=51000+uIdx*1200, ralentiCum=17000+uIdx*400;
+    const ecm=[],rpm=[],carga=[],oil=[],coolant=[],manifold=[],fallas=[];
+    dias.forEach(d=>{
+      const fTxt=("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2)+"/"+d.getFullYear();
+      const activo=rnd()>0.08;
+      const kmDia=activo?(30+rnd()*90):0;
+      const horasDia=activo?(2+rnd()*9):0;
+      const ralentiDia=activo?Math.min(horasDia*0.15+rnd()*0.6, horasDia*0.4):0; // ralentí siempre <= horas motor
+      const litrosDia=kmDia*0.32;
+      const litrosIdleDia=activo?ralentiDia*0.9:0;
+
+      const odomIni=odomCum, odomFin=odomCum+kmDia; odomCum=odomFin;
+      const fuelIni=fuelCum, fuelFin=fuelCum+litrosDia; fuelCum=fuelFin;
+      const fuelIdleIni=fuelIdleCum, fuelIdleFin=fuelIdleCum+litrosIdleDia; fuelIdleCum=fuelIdleFin;
+      const horasIni=horasCum, horasFin=horasCum+horasDia; horasCum=horasFin;
+      const ralentiIni=ralentiCum, ralentiFin=ralentiCum+ralentiDia; ralentiCum=ralentiFin;
+
+      ecm.push({fecha:fTxt,placa,
+        odometro_inicio:odomIni.toFixed(2), odometro_fin:odomFin.toFixed(2),
+        fuel_inicio:fuelIni.toFixed(2), fuel_fin:fuelFin.toFixed(2),
+        fuel_idle_inicio:fuelIdleIni.toFixed(2), fuel_idle_fin:fuelIdleFin.toFixed(2),
+        horas_inicio:horasIni.toFixed(2), horas_fin:horasFin.toFixed(2),
+        ralenti_inicio:ralentiIni.toFixed(2), ralenti_fin:ralentiFin.toFixed(2)});
+      if(activo){
+        const rpmProm=850+rnd()*550; rpm.push({fecha:fTxt,placa,min:(rpmProm-350-rnd()*100).toFixed(2),prom:rpmProm.toFixed(2),max:(rpmProm+550+rnd()*300).toFixed(2)});
+        const cargaProm=12+rnd()*22; carga.push({fecha:fTxt,placa,min:"0.00",prom:cargaProm.toFixed(2),max:(85+rnd()*15).toFixed(2)});
+        const oilProm=28+rnd()*14; oil.push({fecha:fTxt,placa,min:(oilProm-16-rnd()*4).toFixed(2),prom:oilProm.toFixed(2),max:(oilProm+22+rnd()*10).toFixed(2)});
+        const coolProm=68+rnd()*14; coolant.push({fecha:fTxt,placa,min:(coolProm-35-rnd()*8).toFixed(2),prom:coolProm.toFixed(2),max:(coolProm+8+rnd()*10).toFixed(2)});
+        const maniProm=0.3+rnd()*1.2; manifold.push({fecha:fTxt,placa,min:"0.00",prom:maniProm.toFixed(2),max:(maniProm+2.5+rnd()*2).toFixed(2)});
+        if(rnd()>0.965){ const f=falasCodigos[Math.floor(rnd()*falasCodigos.length)];
+          fallas.push({fecha_hora:fTxt+" "+(8+Math.floor(rnd()*10))+":"+("0"+Math.floor(rnd()*60)).slice(-2)+":00",placa,diagnostico:f[1],falla:"Código activo",controlador:f[2],codigo_diagnostico:f[0],codigo_falla:"1"}); }
+      } else {
+        rpm.push({fecha:fTxt,placa,min:"0.00",prom:"0.00",max:"0.00"}); carga.push({fecha:fTxt,placa,min:"0.00",prom:"0.00",max:"0.00"});
+        oil.push({fecha:fTxt,placa,min:"0.00",prom:"0.00",max:"0.00"}); coolant.push({fecha:fTxt,placa,min:"0.00",prom:"0.00",max:"0.00"});
+        manifold.push({fecha:fTxt,placa,min:"0.00",prom:"0.00",max:"0.00"});
+      }
+    });
+    dataPorUnidad[placa]={placa,ecm,rpm,carga,oil,coolant,manifold,fallas};
+  });
+  return dataPorUnidad;
+}
+
+function corregirTexto(valor){ if(typeof valor!=="string") return valor; const m=valor.match(/^(\d{3,})[.\-](\d{2})/); if(m&&valor.includes("-")&&!valor.includes("/")) return parseFloat(m[1]+"."+m[2]); return valor; }
+function num(v){ const c=corregirTexto(v); const n=parseFloat(c); return isNaN(n)?0:n; }
+function parseFechaDDMMYYYY(str){ const [d,m,y]=str.split("/").map(Number); return new Date(y,m-1,d); }
+
+let DATA={}, unidadActual="TODAS", categoriaActual="motor", subvistaActual="variables";
+let anioActual=2026, mesActual=new Date().getMonth(), diaSeleccionado=null;
+let metricaActual="prom"; // min | prom | max
+const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const COLORS={ok:"#2DD9A0",warn:"#FFB020",crit:"#FF3B3B",brand:"#CC0000"};
+
+function boot(){
+  const fill=document.getElementById("bootFill");
+  let pct=0;
+  const iv=setInterval(()=>{
+    pct+=4; fill.style.width=Math.min(pct,100)+"%";
+    if(pct>=100){ clearInterval(iv); setTimeout(()=>{ document.getElementById("boot").classList.add("hide"); mostrarVideoIntro(); },300); }
+  },70);
+}
+
+/* ===== NAVEGACIÓN ENTRE PANTALLAS ===== */
+function mostrarVideoIntro(){
+  document.getElementById("screenVideoIntro").style.display="block";
+  const video=document.getElementById("videoIntro");
+  video.muted=true; video.currentTime=0; // silenciado por defecto: ningún navegador permite audio sin un clic previo
+  video.play().catch(()=>{});
+}
+function mostrarHome(){
+  document.getElementById("screenVideoIntro").style.display="none";
+  const v=document.getElementById("videoIntro"); if(v) v.pause();
+  document.getElementById("screenHome").classList.add("show");
+  document.getElementById("screenApp").style.display="none";
+}
+function mostrarApp(cat, sub){
+  document.getElementById("screenHome").classList.remove("show");
+  document.getElementById("screenApp").style.display="block";
+  categoriaActual=cat;
+
+  // Limpia el estado activo de TODA la navegación (categoría + submenús) antes de marcar el correcto
+  document.querySelectorAll(".nav-item[data-cat]").forEach(n=>n.classList.toggle("active", n.dataset.cat===cat));
+  document.querySelectorAll(".subnav-item").forEach(n=>n.classList.remove("active"));
+
+  const subDefault = {motor:"variables", operacion:"rendimientos", seguridad:"fallas"}[cat];
+  subvistaActual = sub || subDefault;
+  const subEl = document.querySelector(`.subnav-item[data-cat="${cat}"][data-sub="${subvistaActual}"]`);
+  if(subEl) subEl.classList.add("active");
+
+  document.getElementById("catTitle").textContent = {motor:"Motor",operacion:"Operación",seguridad:"Seguridad"}[cat];
+  document.getElementById("viewMotor").style.display=cat==="motor"?"block":"none";
+  document.getElementById("viewOperacion").style.display=cat==="operacion"?"block":"none";
+  document.getElementById("viewSeguridad").style.display=cat==="seguridad"?"block":"none";
+  document.getElementById("metricToggle").style.display=cat==="motor"?"flex":"none";
+  requestAnimationFrame(()=>{ render(); setTimeout(resizeAllCharts,60); });
+}
+function resizeAllCharts(){
+  document.querySelectorAll('[id^="g_"],#trendMotor,#trendOperacion,#trendGalones').forEach(el=>{ const i=echarts.getInstanceByDom(el); if(i) i.resize(); });
+}
+
+async function intentarLogin(){
+  const u=document.getElementById("loginUser").value.trim();
+  const p=document.getElementById("loginPass").value.trim();
+  const err=document.getElementById("loginError");
+  err.textContent="";
+  let ok=false;
+  if(CONFIG.USAR_LOGIN_DEMO){
+    ok = (u===CONFIG.DEMO_USUARIO && p===CONFIG.DEMO_CLAVE);
+  } else {
+    try{
+      const resp = await fetch(CONFIG.API_URL+"?accion=login&usuario="+encodeURIComponent(u)+"&clave="+encodeURIComponent(p));
+      const json = await resp.json(); ok = !!json.ok;
+    }catch(e){ err.textContent="Error de conexión con el servidor."; return; }
+  }
+  if(ok){ mostrarHome(); } else { err.textContent="Usuario o contraseña incorrectos."; }
+}
+
+function buildHomeCards(){
+  const cont=document.getElementById("catGrid"); cont.innerHTML="";
+  HOME_CATEGORIAS.forEach(c=>{
+    const panel=document.createElement("div"); panel.className="cat-panel";
+    panel.style.setProperty("--cat-color", `var(--cat-${c.cat})`);
+    const head=document.createElement("div");
+    head.className="cat-panel-head";
+    head.innerHTML=`<span class="icon-badge"><img class="icon" src="${c.icon}" alt="${c.label}"></span><h2>${c.label}</h2>`;
+    head.style.cursor="pointer";
+    head.addEventListener("click",()=>mostrarApp(c.cat));
+    panel.appendChild(head);
+    c.items.forEach(it=>{
+      const chip=document.createElement("div");
+      chip.className="indicator-chip"+(it.disabled?" disabled":"");
+      chip.innerHTML=`<span>${it.label}${it.disabled?' <span class="soon">próx.</span>':''}</span><span class="arrow">→</span>`;
+      if(!it.disabled){ chip.style.cursor="pointer"; chip.addEventListener("click",(e)=>{ e.stopPropagation(); mostrarApp(c.cat, it.sub); }); }
+      panel.appendChild(chip);
+    });
+    cont.appendChild(panel);
+  });
+}
+
+function init(){
+  boot();
+  DATA=CONFIG.USAR_DATOS_DEMO?generarDatosDemo():{};
+  document.querySelectorAll(".brand-bg, .hero-media").forEach(el=>{
+    el.style.setProperty("--brand-bg-url", `url('${CONFIG.CLIENT_BG_URL}')`);
+  });
+  if(CONFIG.NAVISAF_LOGO_URL){
+    document.getElementById("loginLogoSlot").innerHTML=`<img src="${CONFIG.NAVISAF_LOGO_URL}" alt="logo" style="width:100%;height:100%;object-fit:contain;">`;
+  }
+  document.getElementById("togglePass").addEventListener("click", ()=>{
+    const inp=document.getElementById("loginPass");
+    const nowShown = inp.type==="text";
+    inp.type = nowShown ? "password" : "text";
+    document.getElementById("eyeOpen").style.display = nowShown ? "block":"none";
+    document.getElementById("eyeClosed").style.display = nowShown ? "none":"block";
+  });
+  document.getElementById("loginBtn").addEventListener("click", intentarLogin);
+  document.getElementById("loginPass").addEventListener("keydown", e=>{ if(e.key==="Enter") intentarLogin(); });
+  document.getElementById("btnVolverHome").addEventListener("click", mostrarHome);
+  document.getElementById("btnSkipVideo").addEventListener("click", ()=>{
+    const video=document.getElementById("videoIntro");
+    const btn=document.getElementById("btnSkipVideo");
+    if(video.paused){ video.play(); btn.textContent="Detener video ▸"; }
+    else { video.pause(); btn.textContent="▶ Reproducir"; }
+  });
+  document.getElementById("btnMuteVideo").addEventListener("click", (e)=>{
+    const video=document.getElementById("videoIntro");
+    video.muted=!video.muted;
+    e.target.textContent = video.muted ? "🔇 Activar sonido" : "🔊 Sonido activado";
+  });
+  buildHomeCards();
+
+  const unidades=Object.keys(DATA);
+  const sel=document.getElementById("unitSelect");
+  const optTodas=document.createElement("option"); optTodas.value="TODAS"; optTodas.textContent="TODAS LAS UNIDADES"; sel.appendChild(optTodas);
+  unidades.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=p; sel.appendChild(o); });
+  sel.value=unidadActual; sel.addEventListener("change",e=>{ unidadActual=e.target.value; buildDiaSelector(); render(); });
+
+  document.querySelectorAll(".nav-item[data-cat]").forEach(el=>{
+    el.addEventListener("click",()=> mostrarApp(el.dataset.cat));
+  });
+
+  document.getElementById("metricToggle").addEventListener("click",e=>{
+    const opt=e.target.closest(".m-opt"); if(!opt) return;
+    document.querySelectorAll("#metricToggle .m-opt").forEach(o=>o.classList.remove("active")); opt.classList.add("active");
+    metricaActual=opt.dataset.m; render();
+  });
+
+  // gauges dinámicos
+  const grid=document.getElementById("gaugesGrid");
+  GAUGES_CONFIG.forEach(g=>{
+    const card=document.createElement("div"); card.className="gauge-card";
+    card.innerHTML=`<div class="gtitle">${g.label}</div><div class="gauge-chart" id="g_${g.id}"></div>`;
+    grid.appendChild(card);
+  });
+
+  document.querySelectorAll(".subnav-item:not(.disabled)").forEach(el=>{
+    el.addEventListener("click",()=> mostrarApp(el.dataset.cat, el.dataset.sub));
+  });
+
+  buildAnioMesSelectors();
+  document.getElementById("btnMesCompleto").addEventListener("click",()=>{ diaSeleccionado=null; render(); });
+  render();
+}
+
+function buildAnioMesSelectors(){
+  const selA=document.getElementById("selAnio"), selM=document.getElementById("selMes");
+  [2025,2026].forEach(y=>{ const o=document.createElement("option"); o.value=y; o.textContent=y; selA.appendChild(o); });
+  selA.value=anioActual;
+  MESES.forEach((m,idx)=>{ const o=document.createElement("option"); o.value=idx; o.textContent=m; selM.appendChild(o); });
+  selM.value=mesActual;
+  selA.addEventListener("change",e=>{ anioActual=parseInt(e.target.value); diaSeleccionado=null; buildDiaSelector(); render(); });
+  selM.addEventListener("change",e=>{ mesActual=parseInt(e.target.value); diaSeleccionado=null; buildDiaSelector(); render(); });
+  buildDiaSelector();
+}
+
+function buildDiaSelector(){
+  const selD=document.getElementById("selDia"); selD.innerHTML="";
+  const optTodo=document.createElement("option"); optTodo.value=""; optTodo.textContent="Todo el mes"; selD.appendChild(optTodo);
+  const diasConDatos=[...new Set(getEcmDiasSerie().filter(f=>{const d=parseFechaDDMMYYYY(f.fecha);return d.getFullYear()===anioActual&&d.getMonth()===mesActual;}).map(f=>parseInt(f.fecha.split("/")[0])))].sort((a,b)=>a-b);
+  diasConDatos.forEach(d=>{ const o=document.createElement("option"); o.value=d; o.textContent="Día "+d; selD.appendChild(o); });
+  selD.value = diaSeleccionado ?? "";
+  selD.onchange = e=>{ diaSeleccionado = e.target.value===""? null : parseInt(e.target.value); render(); };
+}
+
+function filtrarPorPeriodo(arr){
+  return arr.filter(f=>{ const d=parseFechaDDMMYYYY(f.fecha); if(d.getFullYear()!==anioActual||d.getMonth()!==mesActual) return false; if(diaSeleccionado!==null&&d.getDate()!==diaSeleccionado) return false; return true; });
+}
+
+// Serie de estadísticas (rpm/carga/oil/coolant/manifold) para la unidad actual, o promedio de flota si "TODAS"
+function getStatsSerie(tipo){
+  if(unidadActual==="TODAS"){
+    const unidades=Object.keys(DATA);
+    const porFecha={};
+    unidades.forEach(p=>{
+      (DATA[p][tipo]||[]).forEach(f=>{ (porFecha[f.fecha]=porFecha[f.fecha]||[]).push(f); });
+    });
+    return Object.keys(porFecha).map(fecha=>{
+      const filas=porFecha[fecha].filter(f=>num(f.prom)>0);
+      if(filas.length===0) return {fecha, placa:"TODAS", min:"0.00", prom:"0.00", max:"0.00"};
+      const avg=key=>(filas.reduce((a,f)=>a+num(f[key]),0)/filas.length).toFixed(2);
+      return {fecha, placa:"TODAS", min:avg("min"), prom:avg("prom"), max:avg("max")};
+    });
+  }
+  return (DATA[unidadActual] && DATA[unidadActual][tipo]) || [];
+}
+
+// Serie diaria de ECM ya calculada (galones/horas/km/etc.) para la unidad actual, o SUMA de flota si "TODAS"
+function getEcmDiasSerie(){
+  if(unidadActual==="TODAS"){
+    const unidades=Object.keys(DATA);
+    const porFecha={};
+    unidades.forEach(p=>{
+      (DATA[p].ecm||[]).forEach(fila=>{
+        const dd=calcularDiaECM(fila);
+        if(!porFecha[dd.fecha]) porFecha[dd.fecha]={fecha:dd.fecha, placa:"TODAS", galones:0, horasMotor:0, horasRalenti:0, km:0, unidadesConDato:0};
+        const acc=porFecha[dd.fecha];
+        acc.galones+=dd.galones; acc.horasMotor+=dd.horasMotor; acc.horasRalenti+=dd.horasRalenti; acc.km+=dd.km; acc.unidadesConDato+=1;
+      });
+    });
+    return Object.values(porFecha).map(o=>({
+      ...o,
+      horasConduccion: Math.max(o.horasMotor-o.horasRalenti,0),
+      tiempoMuerto: Math.max(24*o.unidadesConDato - o.horasMotor, 0)
+    }));
+  }
+  return ((DATA[unidadActual] && DATA[unidadActual].ecm) || []).map(calcularDiaECM);
+}
+
+// Fallas de la unidad actual, o de TODAS combinadas
+function getFallasSerie(){
+  if(unidadActual==="TODAS"){
+    return Object.keys(DATA).flatMap(p=>DATA[p].fallas||[]);
+  }
+  return (DATA[unidadActual] && DATA[unidadActual].fallas) || [];
+}
+
+// Regla: día específico -> valor tal cual. Agregado (mes) -> SIEMPRE promedio de la columna elegida.
+function valorSegunMetrica(arr){
+  const filtrado=filtrarPorPeriodo(arr).filter(f=>num(f.prom)>0 || diaSeleccionado!==null);
+  if(filtrado.length===0) return 0;
+  if(diaSeleccionado!==null) return filtrado.length? num(filtrado[0][metricaActual]) : 0;
+  const valores=filtrado.map(f=>num(f[metricaActual]));
+  return valores.reduce((a,b)=>a+b,0)/valores.length;
+}
+
+function render(){
+  if(!DATA[unidadActual] && unidadActual!=="TODAS") return;
+  document.getElementById("placaLabel").textContent = unidadActual==="TODAS" ? "TODAS LAS UNIDADES" : unidadActual;
+  document.getElementById("statTotal").textContent=Object.keys(DATA).length;
+  document.getElementById("selInfo").textContent=diaSeleccionado?`Día ${diaSeleccionado} de ${MESES[mesActual]}`:`${MESES[mesActual]} ${anioActual} · mes completo (promedios)`;
+  document.getElementById("btnMesCompleto").classList.toggle("active",diaSeleccionado===null);
+
+  if(categoriaActual==="motor") renderMotor();
+  if(categoriaActual==="operacion") renderOperacion();
+  if(categoriaActual==="seguridad") renderSeguridad();
+  renderTicker();
+}
+
+function crearGauge(elId,valor,min,max,colorVar,unidad){
+  const el=document.getElementById(elId); if(!el) return;
+  const color=getComputedStyle(document.documentElement).getPropertyValue(colorVar.replace("var(","").replace(")","")).trim()||colorVar;
+  const chart=echarts.getInstanceByDom(el)||echarts.init(el);
+  chart.setOption({series:[{type:'gauge',min,max,radius:'92%',startAngle:210,endAngle:-30,
+    axisLine:{lineStyle:{width:6,color:[[1,getComputedStyle(document.documentElement).getPropertyValue('--bg-raised')||'#1D1D20']]}},
+    progress:{show:true,width:6,itemStyle:{color}}, pointer:{show:true,length:'55%',width:3,itemStyle:{color}},
+    axisTick:{show:false},splitLine:{show:false},axisLabel:{show:false},
+    anchor:{show:true,size:8,itemStyle:{color,borderWidth:0}},
+    detail:{valueAnimation:true,fontSize:18,fontFamily:'IBM Plex Mono',fontWeight:600,color:getComputedStyle(document.documentElement).getPropertyValue('--text-primary'),offsetCenter:[0,'68%'],formatter:v=>v.toFixed(1)+unidad},
+    data:[{value:valor}]}]});
+}
+
+function renderMotor(){
+  document.getElementById("subViewVariables").style.display = subvistaActual==="consumo" ? "none":"block";
+  document.getElementById("subViewConsumo").style.display = subvistaActual==="consumo" ? "block":"none";
+
+  if(subvistaActual==="consumo"){ renderConsumoMotor(); return; }
+
+  GAUGES_CONFIG.forEach(g=>{ const v=valorSegunMetrica(getStatsSerie(g.id)); crearGauge("g_"+g.id, v, g.min, g.max, g.color, g.unidad); });
+
+  const serie=filtrarPorPeriodo(getStatsSerie("rpm"));
+  const fechas=serie.map(f=>f.fecha.split("/")[0]);
+  const valores=serie.map(f=>num(f[metricaActual]));
+  const trend=echarts.getInstanceByDom(document.getElementById("trendMotor"))||echarts.init(document.getElementById("trendMotor"));
+  trend.setOption({grid:{left:40,right:16,top:16,bottom:24},
+    tooltip:{trigger:'axis',backgroundColor:'var(--bg-panel)',borderColor:'var(--line)',textStyle:{color:'#E8E8EA',fontSize:11}},
+    xAxis:{type:'category',data:fechas,axisLine:{lineStyle:{color:'#454649'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+    yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+    series:[{name:'RPM '+metricaActual,type:'line',smooth:true,data:valores,itemStyle:{color:COLORS.brand},lineStyle:{width:2},symbol:'none',areaStyle:{color:COLORS.brand+'22'}}]});
+
+  const rpmV=valorSegunMetrica(getStatsSerie("rpm")), oilV=valorSegunMetrica(getStatsSerie("oil")), coolV=valorSegunMetrica(getStatsSerie("coolant")), cargaV=valorSegunMetrica(getStatsSerie("carga"));
+  document.getElementById("kpiMotor").innerHTML=`
+    <div class="kpi-row"><span class="k-lbl">RPM (${metricaActual})</span><span class="k-val mono">${rpmV.toFixed(0)}</span></div>
+    <div class="kpi-row"><span class="k-lbl">Aceite (${metricaActual})</span><span class="k-val mono ${oilV<20?'warn':'ok'}">${oilV.toFixed(1)} PSI</span></div>
+    <div class="kpi-row"><span class="k-lbl">Refrigerante (${metricaActual})</span><span class="k-val mono ${coolV>100?'crit':'ok'}">${coolV.toFixed(1)} °C</span></div>
+    <div class="kpi-row"><span class="k-lbl">Carga motor (${metricaActual})</span><span class="k-val mono">${cargaV.toFixed(1)}%</span></div>`;
+}
+
+const LITROS_A_GALONES = 0.264172;
+
+// Helper: cálculos diarios reales a partir de inicio/fin de la misma fila (no cruza días)
+function calcularDiaECM(fila){
+  const galones = (num(fila.fuel_fin) - num(fila.fuel_inicio)) * LITROS_A_GALONES;
+  const horasMotor = num(fila.horas_fin) - num(fila.horas_inicio);
+  const horasRalenti = num(fila.ralenti_fin) - num(fila.ralenti_inicio);
+  const km = num(fila.odometro_fin) - num(fila.odometro_inicio);
+  const horasConduccion = Math.max(horasMotor - horasRalenti, 0);
+  const tiempoMuerto = Math.max(24 - horasMotor, 0);
+  return { fecha:fila.fecha, placa:fila.placa, galones, horasMotor, horasRalenti, km, horasConduccion, tiempoMuerto };
+}
+
+function renderConsumoMotor(){
+  const dias = filtrarPorPeriodo(getEcmDiasSerie());
+  const fechas = dias.map(f=>f.fecha.split("/")[0]);
+
+  const chart = echarts.getInstanceByDom(document.getElementById("trendGalones"))||echarts.init(document.getElementById("trendGalones"));
+  chart.setOption({grid:{left:45,right:50,top:16,bottom:24},
+    tooltip:{trigger:'axis'}, legend:{data:['Galones','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+    xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
+    yAxis:[{type:'value',name:'gal',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+           {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
+    series:[
+      {name:'Galones',type:'bar',data:dias.map(f=>f.galones.toFixed(2)),itemStyle:{color:COLORS.brand}},
+      {name:'Horas motor',type:'line',yAxisIndex:1,data:dias.map(f=>f.horasMotor.toFixed(2)),itemStyle:{color:COLORS.ok},symbol:'none',lineStyle:{width:2}}
+    ]});
+
+  const totalGalones = dias.reduce((a,f)=>a+f.galones,0);
+  const totalHoras = dias.reduce((a,f)=>a+f.horasMotor,0);
+  document.getElementById("kpiConsumo").innerHTML = `<div class="kpi-row"><span class="k-lbl">Total galones del período</span><span class="k-val mono ok">${totalGalones.toFixed(1)} gal</span></div>
+    <div class="kpi-row"><span class="k-lbl">Promedio diario</span><span class="k-val mono">${(totalGalones/Math.max(dias.length,1)).toFixed(2)} gal/día</span></div>`;
+  document.getElementById("kpiHorasMotor").innerHTML = `<div class="kpi-row"><span class="k-lbl">Total horas motor del período</span><span class="k-val mono ok">${totalHoras.toFixed(1)} h</span></div>
+    <div class="kpi-row"><span class="k-lbl">Rendimiento (gal/hora)</span><span class="k-val mono">${(totalHoras>0?totalGalones/totalHoras:0).toFixed(2)}</span></div>`;
+}
+
+function renderOperacion(){
+  if(subvistaActual==="uso_flota"){ renderUsoFlota(); return; }
+  renderRendimientos();
+}
+
+// RENDIMIENTOS: gal/hora por día (calculado por placa+fecha, restando fin-inicio de esa fila; o suma de flota si "TODAS")
+function renderRendimientos(){
+  const dias = filtrarPorPeriodo(getEcmDiasSerie());
+  const fechas = dias.map(f=>f.fecha.split("/")[0]);
+  const rendimientoDia = dias.map(f=> f.horasMotor>0 ? f.galones/f.horasMotor : 0);
+
+  const trend=echarts.getInstanceByDom(document.getElementById("trendOperacion"))||echarts.init(document.getElementById("trendOperacion"));
+  trend.setOption({grid:{left:50,right:20,top:16,bottom:24},
+    tooltip:{trigger:'axis',formatter:p=>`${p[0].axisValue}: ${p[0].value.toFixed(2)} gal/h`},
+    xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
+    yAxis:{type:'value',name:'gal/h',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+    series:[{type:'line',data:rendimientoDia.map(v=>v.toFixed(2)),smooth:true,itemStyle:{color:COLORS.brand},areaStyle:{color:COLORS.brand+'22'},symbol:'none',lineStyle:{width:2}}]});
+
+  const totalGalones=dias.reduce((a,f)=>a+f.galones,0), totalHoras=dias.reduce((a,f)=>a+f.horasMotor,0), totalKm=dias.reduce((a,f)=>a+f.km,0);
+  document.getElementById("kpiOperacion").innerHTML=`<div class="kpi-row"><span class="k-lbl">Horas motor (período)</span><span class="k-val mono ok">${totalHoras.toFixed(1)} h</span></div><div class="kpi-row"><span class="k-lbl">Distancia (período)</span><span class="k-val mono ok">${totalKm.toFixed(1)} km</span></div>`;
+  document.getElementById("kpiEficiencia").innerHTML=`<div class="kpi-row"><span class="k-lbl">Rendimiento (gal/hora)</span><span class="k-val mono">${(totalHoras>0?totalGalones/totalHoras:0).toFixed(2)}</span></div><div class="kpi-row"><span class="k-lbl">Km / galón</span><span class="k-val mono">${(totalGalones>0?totalKm/totalGalones:0).toFixed(1)}</span></div>`;
+}
+
+// USO DE FLOTA: Conducción / Ralentí / Detenido — con "TODAS" se promedia el % resultante entre unidades (vía suma de horas base)
+function renderUsoFlota(){
+  const dias = filtrarPorPeriodo(getEcmDiasSerie());
+  const totalConduccion = dias.reduce((a,f)=>a+f.horasConduccion,0);
+  const totalRalenti = dias.reduce((a,f)=>a+f.horasRalenti,0);
+  const totalDetenido = dias.reduce((a,f)=>a+f.tiempoMuerto,0);
+  const totalHorasBase = totalConduccion+totalRalenti+totalDetenido;
+
+  const trend=echarts.getInstanceByDom(document.getElementById("trendOperacion"))||echarts.init(document.getElementById("trendOperacion"));
+  trend.setOption({tooltip:{trigger:'item',formatter:p=>`${p.name}: ${p.value.toFixed(1)} h (${(p.value/totalHorasBase*100).toFixed(0)}%)`},
+    legend:{bottom:0,textStyle:{color:'#A8A8AC',fontSize:11}},
+    series:[{type:'pie',radius:['40%','70%'],center:['50%','45%'],
+      label:{color:'#E8E8EA',fontSize:11,formatter:p=>`${p.name}\n${(p.percent).toFixed(0)}%`},
+      data:[
+        {value:totalConduccion,name:'Conducción',itemStyle:{color:COLORS.ok}},
+        {value:totalRalenti,name:'Ralentí',itemStyle:{color:COLORS.warn}},
+        {value:totalDetenido,name:'Detenido',itemStyle:{color:'#4A4B4F'}}
+      ]}]});
+
+  document.getElementById("kpiOperacion").innerHTML=`
+    <div class="kpi-row"><span class="k-lbl">Conducción</span><span class="k-val mono ok">${totalConduccion.toFixed(1)} h (${(totalConduccion/totalHorasBase*100).toFixed(0)}%)</span></div>
+    <div class="kpi-row"><span class="k-lbl">Ralentí</span><span class="k-val mono warn">${totalRalenti.toFixed(1)} h (${(totalRalenti/totalHorasBase*100).toFixed(0)}%)</span></div>
+    <div class="kpi-row"><span class="k-lbl">Detenido</span><span class="k-val mono">${totalDetenido.toFixed(1)} h (${(totalDetenido/totalHorasBase*100).toFixed(0)}%)</span></div>`;
+  document.getElementById("kpiEficiencia").innerHTML=`<div class="kpi-row"><span class="k-lbl">Días evaluados</span><span class="k-val mono">${dias.length}</span></div>
+    <div class="kpi-row"><span class="k-lbl">% tiempo productivo (conducción)</span><span class="k-val mono ${totalConduccion/totalHorasBase<0.3?'warn':'ok'}">${(totalConduccion/totalHorasBase*100).toFixed(0)}%</span></div>`;
+}
+
+function renderSeguridad(){
+  const fallasPeriodo=filtrarPorPeriodo(getFallasSerie().map(f=>({...f,fecha:f.fecha_hora.split(" ")[0]})));
+  document.getElementById("tablaFallas").innerHTML=`<tr style="color:var(--text-dim);text-align:left;border-bottom:1px solid var(--line);"><th style="padding:8px 6px;">Fecha/Hora</th><th style="padding:8px 6px;">Diagnóstico</th><th style="padding:8px 6px;">Controlador</th><th style="padding:8px 6px;">Código</th></tr>`+
+    fallasPeriodo.slice(0,15).map(f=>`<tr style="border-bottom:1px solid var(--line);"><td class="mono" style="padding:8px 6px;color:var(--text-secondary);">${f.fecha_hora}</td><td style="padding:8px 6px;">${f.diagnostico}</td><td style="padding:8px 6px;color:var(--text-secondary);">${f.controlador}</td><td class="mono" style="padding:8px 6px;color:var(--brand);">${f.codigo_diagnostico}</td></tr>`).join("");
+}
+
+function renderTicker(){
+  const recientes=getFallasSerie().slice(-14);
+  const html=recientes.map(f=>`<span class="ticker-item"><span class="t-dot"></span><span class="t-code mono">${f.codigo_diagnostico}</span> ${f.diagnostico} — ${f.placa} · ${f.fecha_hora}</span>`).join("");
+  document.getElementById("tickerTrack").innerHTML=html+html;
+}
+
+window.addEventListener("resize",()=>{
+  document.querySelectorAll('[id^="g_"],#trendMotor,#trendOperacion').forEach(el=>{ const i=echarts.getInstanceByDom(el); if(i) i.resize(); });
+});
+
+init();
+</script>
+</body>
+</html>
