@@ -54,9 +54,11 @@
 #appRoot .theme-toggle .opt.active {background:var(--brand);color:#fff;}
 
   /* ===== TOP BAR ===== */
+#appRoot #screenApp {position:absolute;inset:0;display:none;flex-direction:column;z-index:300;}
+#appRoot #screenApp.show {display:flex;}
 #appRoot .topbar {
     display:flex; align-items:center; gap:20px; padding:12px 24px; border-bottom:1px solid var(--line);
-    background:var(--bg-panel); position:sticky; top:0; z-index:100;
+    background:var(--bg-panel); flex-shrink:0; z-index:100;
   }
 #appRoot .brand-block {display:flex;align-items:center;gap:12px;}
 #appRoot .logo-slot {
@@ -80,8 +82,8 @@
 #appRoot .unit-switcher select option {background:var(--bg-panel);color:var(--text-primary);}
 
   /* ===== LAYOUT ===== */
-#appRoot .layout {display:grid;grid-template-columns:180px 1fr;min-height:100%;}
-#appRoot .sidenav {border-right:1px solid var(--line);padding:20px 0;background:var(--bg-panel);}
+#appRoot .layout {display:grid;grid-template-columns:180px 1fr;flex:1;min-height:0;}
+#appRoot .sidenav {border-right:1px solid var(--line);padding:20px 0;background:var(--bg-panel);overflow-y:auto;}
 #appRoot .nav-item {display:flex;align-items:center;gap:12px;padding:13px 22px;color:var(--text-secondary);cursor:pointer;font-size:13px;font-weight:500;letter-spacing:.03em;border-left:2px solid transparent;transition:all .15s;}
 #appRoot .nav-item:hover {color:var(--text-primary);background:var(--bg-raised);}
 #appRoot .nav-item.active {color:var(--text-primary);border-left-color:var(--accent);background:var(--accent-dim);}
@@ -100,7 +102,7 @@
 #appRoot .subnav-item.disabled:hover {color:var(--text-dim);}
 #appRoot .soon {font-size:8px;color:var(--text-dim);border:1px solid var(--line);border-radius:3px;padding:1px 4px;margin-left:4px;letter-spacing:.03em;}
 
-#appRoot .main {padding:22px 26px 0;}
+#appRoot .main {padding:22px 26px 0;overflow-y:auto;min-height:0;}
 #appRoot .section-title {display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
 #appRoot .section-title h1 {font-size:19px;font-weight:600;}
 #appRoot .section-title .placa {font-family:'IBM Plex Mono';color:#fff;font-size:13px;background:#000000CC;border:1px solid var(--line-bright);padding:3px 10px;border-radius:4px;}
@@ -226,7 +228,7 @@
 #appRoot .home-footer {text-align:center;margin-top:24px;color:var(--text-dim);font-size:10px;letter-spacing:.05em;}
 </style>
 
-<div id="appRoot" style="position:relative;width:100%;height:100vh;overflow-x:hidden;overflow-y:auto;">
+<div id="appRoot" style="position:relative;width:100%;height:100vh;overflow:hidden;">
 
 <div id="boot">
   <div class="boot-logo">CARGANDO SISTEMA</div>
@@ -281,7 +283,7 @@
   </div>
 </div>
 
-<div id="screenApp" style="display:none;">
+<div id="screenApp">
   <div class="brand-bg" id="bgApp"></div>
 <div class="topbar">
   <div class="dn-btn" id="btnVolverHome" style="margin-right:4px;cursor:pointer;">← Inicio</div>
@@ -508,11 +510,11 @@ function mostrarHome(){
   document.getElementById("screenVideoIntro").style.display="none";
   const v=document.getElementById("videoIntro"); if(v) v.pause();
   document.getElementById("screenHome").classList.add("show");
-  document.getElementById("screenApp").style.display="none";
+  document.getElementById("screenApp").classList.remove("show");
 }
 function mostrarApp(cat, sub){
   document.getElementById("screenHome").classList.remove("show");
-  document.getElementById("screenApp").style.display="block";
+  document.getElementById("screenApp").classList.add("show");
   categoriaActual=cat;
 
   // Limpia el estado activo de TODA la navegación (categoría + submenús) antes de marcar el correcto
