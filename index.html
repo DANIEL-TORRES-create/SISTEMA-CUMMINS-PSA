@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+</head>
+<body>
 <style>
   :root{
     /* ===== TEMA OSCURO (Home y dashboard, después del login) ===== */
@@ -223,8 +225,6 @@
   .indicator-chip .arrow{color:var(--text-dim);}
   .home-footer{text-align:center;margin-top:24px;color:var(--text-dim);font-size:10px;letter-spacing:.05em;}
 </style>
-</head>
-<body>
 
 <div id="boot">
   <div class="boot-logo">CARGANDO SISTEMA</div>
@@ -236,7 +236,7 @@
 <!-- ===== VIDEO INTRO + LOGIN SOBREPUESTO ===== -->
 <div id="screenVideoIntro" style="position:fixed;inset:0;background:#000;z-index:450;display:none;">
   <video id="videoIntro" style="width:100%;height:100%;object-fit:cover;" playsinline loop muted autoplay>
-    <source src="navisafintro.mp4" type="video/mp4">
+    <source src="https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/navisafintro.mp4" type="video/mp4">
   </video>
   
 
@@ -299,20 +299,20 @@
   <div class="sidenav">
     <div class="nav-label">CATEGORÍAS</div>
 
-    <div class="nav-item active" data-cat="motor"><span class="nav-icon-badge"><img class="nav-icon" src="iconmotor.png" alt="Motor"></span> MOTOR</div>
+    <div class="nav-item active" data-cat="motor"><span class="nav-icon-badge"><img class="nav-icon" src="https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconmotor.png" alt="Motor"></span> MOTOR</div>
     <div class="subnav" id="subnav-motor">
       <div class="subnav-item active" data-cat="motor" data-sub="variables">Variables de Motor</div>
       <div class="subnav-item" data-cat="motor" data-sub="consumo">Galones Consumidos y Horas Motor</div>
       <div class="subnav-item disabled" data-cat="motor" data-sub="encendidos">Encendidos <span class="soon">próx.</span></div>
     </div>
 
-    <div class="nav-item" data-cat="operacion"><span class="nav-icon-badge"><img class="nav-icon" src="iconoperacion.png" alt="Operación"></span> OPERACIÓN</div>
+    <div class="nav-item" data-cat="operacion"><span class="nav-icon-badge"><img class="nav-icon" src="https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconoperacion.png" alt="Operación"></span> OPERACIÓN</div>
     <div class="subnav" id="subnav-operacion">
       <div class="subnav-item active" data-cat="operacion" data-sub="rendimientos">Rendimientos</div>
       <div class="subnav-item" data-cat="operacion" data-sub="uso_flota">Uso de Flota</div>
     </div>
 
-    <div class="nav-item" data-cat="seguridad"><span class="nav-icon-badge"><img class="nav-icon" src="iconseguridad.png" alt="Seguridad"></span> SEGURIDAD</div>
+    <div class="nav-item" data-cat="seguridad"><span class="nav-icon-badge"><img class="nav-icon" src="https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconseguridad.png" alt="Seguridad"></span> SEGURIDAD</div>
     <div class="subnav" id="subnav-seguridad">
       <div class="subnav-item active" data-cat="seguridad" data-sub="fallas">Fallas</div>
       <div class="subnav-item disabled" data-cat="seguridad" data-sub="acelerometro">Acelerómetro <span class="soon">próx.</span></div>
@@ -386,24 +386,24 @@
 <script>
 const CONFIG = {
   API_URL:"PENDIENTE_DE_PUBLICAR", USAR_DATOS_DEMO:true, LOGO_URL:null, /* ej: "logo-cummins.png" */
-  NAVISAF_LOGO_URL:"navisaflogo.png",
+  NAVISAF_LOGO_URL:"https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/navisaflogo.png",
   USAR_LOGIN_DEMO:true, DEMO_USUARIO:"admin", DEMO_CLAVE:"psa2026",
-  CLIENT_BG_URL:"cumminsbg.jpg" // fondo de marca del cliente, Home y App
+  CLIENT_BG_URL:"https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/cumminsbg.jpg" // fondo de marca del cliente, Home y App
   // En producción: fetch(CONFIG.API_URL + "?accion=login&usuario="+u+"&clave="+p) devuelve {ok:true/false}
 };
 
 /* ===== INDICADORES DE LA PANTALLA PRINCIPAL (mismo patrón config que GAUGES_CONFIG) ===== */
 const HOME_CATEGORIAS = [
-  { cat:"motor", icon:"iconmotor.png", label:"MOTOR", items:[
+  { cat:"motor", icon:"https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconmotor.png", label:"MOTOR", items:[
     {label:"Variables de Motor", sub:"variables"},
     {label:"Galones Consumidos y Horas Motor", sub:"consumo"},
     {label:"Encendidos", sub:"encendidos", disabled:true}
   ]},
-  { cat:"operacion", icon:"iconoperacion.png", label:"OPERACIÓN", items:[
+  { cat:"operacion", icon:"https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconoperacion.png", label:"OPERACIÓN", items:[
     {label:"Rendimientos", sub:"rendimientos"},
     {label:"Uso de Flota", sub:"uso_flota"}
   ]},
-  { cat:"seguridad", icon:"iconseguridad.png", label:"SEGURIDAD", items:[
+  { cat:"seguridad", icon:"https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconseguridad.png", label:"SEGURIDAD", items:[
     {label:"Fallas", sub:"fallas"},
     {label:"Acelerómetro", sub:"acelerometro", disabled:true},
     {label:"Exceso de Velocidad", sub:"velocidad", disabled:true}
@@ -570,32 +570,40 @@ function buildHomeCards(){
   });
 }
 
+// Helper defensivo: si MyGeotab inserta el contenido de forma distinta y algún elemento
+// puntual no aparece, esto evita que TODO init() se detenga por un solo elemento faltante.
+function on(id, ev, fn){
+  const el=document.getElementById(id);
+  if(el) el.addEventListener(ev, fn);
+  else console.warn("Elemento no encontrado, se omite listener:", id);
+}
+
 function init(){
   boot();
   DATA=CONFIG.USAR_DATOS_DEMO?generarDatosDemo():{};
   document.querySelectorAll(".brand-bg, .hero-media").forEach(el=>{
     el.style.setProperty("--brand-bg-url", `url('${CONFIG.CLIENT_BG_URL}')`);
   });
-  if(CONFIG.NAVISAF_LOGO_URL){
+  if(CONFIG.NAVISAF_LOGO_URL && document.getElementById("loginLogoSlot")){
     document.getElementById("loginLogoSlot").innerHTML=`<img src="${CONFIG.NAVISAF_LOGO_URL}" alt="logo" style="width:100%;height:100%;object-fit:contain;">`;
   }
-  document.getElementById("togglePass").addEventListener("click", ()=>{
+  on("togglePass","click", ()=>{
     const inp=document.getElementById("loginPass");
     const nowShown = inp.type==="text";
     inp.type = nowShown ? "password" : "text";
     document.getElementById("eyeOpen").style.display = nowShown ? "block":"none";
     document.getElementById("eyeClosed").style.display = nowShown ? "none":"block";
   });
-  document.getElementById("loginBtn").addEventListener("click", intentarLogin);
-  document.getElementById("loginPass").addEventListener("keydown", e=>{ if(e.key==="Enter") intentarLogin(); });
-  document.getElementById("btnVolverHome").addEventListener("click", mostrarHome);
-  document.getElementById("btnSkipVideo").addEventListener("click", ()=>{
+  on("loginBtn","click", intentarLogin);
+  on("loginPass","keydown", e=>{ if(e.key==="Enter") intentarLogin(); });
+  on("btnVolverHome","click", mostrarHome);
+  on("btnSkipVideo","click", ()=>{
     const video=document.getElementById("videoIntro");
     const btn=document.getElementById("btnSkipVideo");
     if(video.paused){ video.play(); btn.textContent="Detener video ▸"; }
     else { video.pause(); btn.textContent="▶ Reproducir"; }
   });
-  document.getElementById("btnMuteVideo").addEventListener("click", (e)=>{
+  on("btnMuteVideo","click", (e)=>{
     const video=document.getElementById("videoIntro");
     video.muted=!video.muted;
     e.target.textContent = video.muted ? "🔇 Activar sonido" : "🔊 Sonido activado";
@@ -612,7 +620,7 @@ function init(){
     el.addEventListener("click",()=> mostrarApp(el.dataset.cat));
   });
 
-  document.getElementById("metricToggle").addEventListener("click",e=>{
+  on("metricToggle","click",e=>{
     const opt=e.target.closest(".m-opt"); if(!opt) return;
     document.querySelectorAll("#metricToggle .m-opt").forEach(o=>o.classList.remove("active")); opt.classList.add("active");
     metricaActual=opt.dataset.m; render();
@@ -631,7 +639,6 @@ function init(){
   });
 
   buildAnioMesSelectors();
-  document.getElementById("btnMesCompleto").addEventListener("click",()=>{ diaSeleccionado=null; render(); });
   render();
 }
 
