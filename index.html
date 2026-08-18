@@ -431,14 +431,17 @@ function seedRandom(seed){ return function(){ seed=(seed*9301+49297)%233280; ret
 function generarDatosDemo(){
   const unidades=["ALIOT 1","ALIOT 2","ALIOT 3","PSA-07","PSA-12"];
   const dataPorUnidad={};
-  const falasCodigos=[["P0087","Baja presión de riel de combustible","ECM"],["P0128","Termostato de refrigerante","Coolant"],
-    ["P0521","Circuito de presión de aceite","ECM"],["P2263","Turbo / rendimiento sobrealimentador","Manifold"],["P0524","Presión de aceite muy baja","ECM"]];
+  const falasCodigos=[["97","3","Indicador de agua en el combustible 1","Voltage above normal or shorted to high source","Engine #1"],
+    ["91","4","Posición del pedal del acelerador 1","Voltage below normal or shorted to low source","Engine #1"],
+    ["100","1","Presión de aceite del motor","Data valid but below normal operational range","Engine #1"],
+    ["110","0","Temperatura del refrigerante","Data valid but above normal operational range","Engine #1"],
+    ["639","9","Red J1939 Red de vehículos primarios #1","Abnormal update rate","Engine #1"]];
   unidades.forEach((placa,uIdx)=>{
     const rnd=seedRandom(1000+uIdx*77);
     const dias=[]; const fechaInicio=new Date(2026,0,1);
     for(let i=0;i<227;i++){ dias.push(new Date(fechaInicio.getTime()+i*86400000)); }
     let odomCum=45000+uIdx*3000, fuelCum=8000+uIdx*500, fuelIdleCum=1200, horasCum=51000+uIdx*1200, ralentiCum=17000+uIdx*400;
-    const ecm=[],rpm=[],carga=[],oil=[],coolant=[],manifold=[],fallas=[];
+    const ecm=[],rpm=[],carga=[],oil=[],coolant=[],manifold=[],fallas=[],diario=[];
     dias.forEach(d=>{
       const fTxt=("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2)+"/"+d.getFullYear();
       const activo=rnd()>0.08;
@@ -460,21 +463,50 @@ function generarDatosDemo(){
         fuel_idle_inicio:fuelIdleIni.toFixed(2), fuel_idle_fin:fuelIdleFin.toFixed(2),
         horas_inicio:horasIni.toFixed(2), horas_fin:horasFin.toFixed(2),
         ralenti_inicio:ralentiIni.toFixed(2), ralenti_fin:ralentiFin.toFixed(2)});
+
+      let rpmMin="0.00",rpmProm2="0.00",rpmMax="0.00", cargaMin="0.00",cargaProm2="0.00",cargaMax="0.00";
+      let oilMin="0.00",oilProm2="0.00",oilMax="0.00", coolMin="0.00",coolProm2="0.00",coolMax="0.00";
+      let maniMin="0.00",maniProm2="0.00",maniMax="0.00";
+
       if(activo){
-        const rpmProm=850+rnd()*550; rpm.push({fecha:fTxt,placa,min:(rpmProm-350-rnd()*100).toFixed(2),prom:rpmProm.toFixed(2),max:(rpmProm+550+rnd()*300).toFixed(2)});
-        const cargaProm=12+rnd()*22; carga.push({fecha:fTxt,placa,min:"0.00",prom:cargaProm.toFixed(2),max:(85+rnd()*15).toFixed(2)});
-        const oilProm=28+rnd()*14; oil.push({fecha:fTxt,placa,min:(oilProm-16-rnd()*4).toFixed(2),prom:oilProm.toFixed(2),max:(oilProm+22+rnd()*10).toFixed(2)});
-        const coolProm=68+rnd()*14; coolant.push({fecha:fTxt,placa,min:(coolProm-35-rnd()*8).toFixed(2),prom:coolProm.toFixed(2),max:(coolProm+8+rnd()*10).toFixed(2)});
-        const maniProm=0.3+rnd()*1.2; manifold.push({fecha:fTxt,placa,min:"0.00",prom:maniProm.toFixed(2),max:(maniProm+2.5+rnd()*2).toFixed(2)});
-        if(rnd()>0.965){ const f=falasCodigos[Math.floor(rnd()*falasCodigos.length)];
-          fallas.push({fecha_hora:fTxt+" "+(8+Math.floor(rnd()*10))+":"+("0"+Math.floor(rnd()*60)).slice(-2)+":00",placa,diagnostico:f[1],falla:"Código activo",controlador:f[2],codigo_diagnostico:f[0],codigo_falla:"1"}); }
+        const rpmProm=850+rnd()*550; rpmMin=(rpmProm-350-rnd()*100).toFixed(2); rpmProm2=rpmProm.toFixed(2); rpmMax=(rpmProm+550+rnd()*300).toFixed(2);
+        rpm.push({fecha:fTxt,placa,min:rpmMin,prom:rpmProm2,max:rpmMax});
+        const cargaProm=12+rnd()*22; cargaProm2=cargaProm.toFixed(2); cargaMax=(85+rnd()*15).toFixed(2);
+        carga.push({fecha:fTxt,placa,min:"0.00",prom:cargaProm2,max:cargaMax});
+        const oilProm=28+rnd()*14; oilMin=(oilProm-16-rnd()*4).toFixed(2); oilProm2=oilProm.toFixed(2); oilMax=(oilProm+22+rnd()*10).toFixed(2);
+        oil.push({fecha:fTxt,placa,min:oilMin,prom:oilProm2,max:oilMax});
+        const coolProm=68+rnd()*14; coolMin=(coolProm-35-rnd()*8).toFixed(2); coolProm2=coolProm.toFixed(2); coolMax=(coolProm+8+rnd()*10).toFixed(2);
+        coolant.push({fecha:fTxt,placa,min:coolMin,prom:coolProm2,max:coolMax});
+        const maniProm=0.3+rnd()*1.2; maniProm2=maniProm.toFixed(2); maniMax=(maniProm+2.5+rnd()*2).toFixed(2);
+        manifold.push({fecha:fTxt,placa,min:"0.00",prom:maniProm2,max:maniMax});
+        if(rnd()>0.88){ const f=falasCodigos[Math.floor(rnd()*falasCodigos.length)];
+          fallas.push({fecha:fTxt,placa,diagnostico:f[2],falla:f[3],controlador:f[4],codigo_diagnostico:f[0],codigo_falla:f[1],cantidad:1+Math.floor(rnd()*9)}); }
       } else {
         rpm.push({fecha:fTxt,placa,min:"0.00",prom:"0.00",max:"0.00"}); carga.push({fecha:fTxt,placa,min:"0.00",prom:"0.00",max:"0.00"});
         oil.push({fecha:fTxt,placa,min:"0.00",prom:"0.00",max:"0.00"}); coolant.push({fecha:fTxt,placa,min:"0.00",prom:"0.00",max:"0.00"});
         manifold.push({fecha:fTxt,placa,min:"0.00",prom:"0.00",max:"0.00"});
       }
+
+      const horasConduccionDia=Math.max(horasDia-ralentiDia,0);
+      diario.push({
+        fecha:fTxt, placa,
+        km: kmDia,
+        horas_motor: horasDia,
+        horas_ralenti: ralentiDia,
+        horas_conduccion: horasConduccionDia,
+        combustible_total: litrosDia*LITROS_A_GALONES,
+        combustible_ralenti: litrosIdleDia*LITROS_A_GALONES,
+        vel_promedio: horasConduccionDia>0 ? Math.min(kmDia/horasConduccionDia, 90) : 0,
+        vel_maxima: activo ? Math.min((kmDia/Math.max(horasConduccionDia,0.1))*1.6, 95) : 0,
+        rpm_min:parseFloat(rpmMin), rpm_prom:parseFloat(rpmProm2), rpm_max:parseFloat(rpmMax),
+        carga_min:parseFloat(cargaMin), carga_prom:parseFloat(cargaProm2), carga_max:parseFloat(cargaMax),
+        aceite_min:parseFloat(oilMin), aceite_prom:parseFloat(oilProm2), aceite_max:parseFloat(oilMax),
+        temperatura_min:parseFloat(coolMin), temperatura_prom:parseFloat(coolProm2), temperatura_max:parseFloat(coolMax),
+        admision_min:parseFloat(maniMin), admision_prom:parseFloat(maniProm2), admision_max:parseFloat(maniMax),
+        encendidos: activo ? 1+Math.floor(rnd()*9) : 0
+      });
     });
-    dataPorUnidad[placa]={placa,ecm,rpm,carga,oil,coolant,manifold,fallas};
+    dataPorUnidad[placa]={placa,diario,ecm,rpm,carga,oil,coolant,manifold,fallas};
   });
   return dataPorUnidad;
 }
@@ -536,10 +568,13 @@ function resizeAllCharts(){
   document.querySelectorAll('[id^="g_"],#trendMotor,#trendOperacion,#trendGalones').forEach(el=>{ const i=echarts.getInstanceByDom(el); if(i) i.resize(); });
 }
 
+let SESSION_TOKEN = null;
+
 async function intentarLogin(){
   const u=document.getElementById("loginUser").value.trim();
   const p=document.getElementById("loginPass").value.trim();
   const err=document.getElementById("loginError");
+  const btn=document.getElementById("loginBtn");
   err.textContent="";
   let ok=false;
   if(CONFIG.USAR_LOGIN_DEMO){
@@ -547,10 +582,55 @@ async function intentarLogin(){
   } else {
     try{
       const resp = await fetch(CONFIG.API_URL+"?accion=login&usuario="+encodeURIComponent(u)+"&clave="+encodeURIComponent(p));
-      const json = await resp.json(); ok = !!json.ok;
+      const json = await resp.json();
+      ok = !!json.ok;
+      if(ok) SESSION_TOKEN = json.token;
     }catch(e){ err.textContent="Error de conexión con el servidor."; return; }
   }
-  if(ok){ mostrarHome(); } else { err.textContent="Usuario o contraseña incorrectos."; }
+  if(!ok){ err.textContent="Usuario o contraseña incorrectos."; return; }
+
+  if(CONFIG.USAR_DATOS_DEMO){
+    mostrarHome();
+    return;
+  }
+
+  // Modo real: cargar datos de la API antes de mostrar el Home
+  btn.textContent="Cargando datos..."; btn.disabled=true;
+  try{
+    await cargarDatosReales();
+    poblarSelectorUnidades();
+    mostrarHome();
+  }catch(e){
+    err.textContent="No se pudieron cargar los datos: "+e.message;
+  }finally{
+    btn.textContent="INGRESAR"; btn.disabled=false;
+  }
+}
+
+// Trae el resumen (lista real de unidades) y luego el detalle completo de cada una,
+// armando el mismo objeto DATA que antes generaba generarDatosDemo().
+function poblarSelectorUnidades(){
+  const sel=document.getElementById("unitSelect");
+  sel.innerHTML="";
+  const optTodas=document.createElement("option"); optTodas.value="TODAS"; optTodas.textContent="TODAS LAS UNIDADES"; sel.appendChild(optTodas);
+  Object.keys(DATA).forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=p; sel.appendChild(o); });
+  sel.value=unidadActual;
+}
+
+async function cargarDatosReales(){
+  const respResumen = await fetch(CONFIG.API_URL+"?vista=resumen&token="+encodeURIComponent(SESSION_TOKEN));
+  const resumen = await respResumen.json();
+  if(resumen.error) throw new Error(resumen.error);
+  const unidades = (resumen.unidades||[]).map(u=>u.placa);
+  if(unidades.length===0) throw new Error("El resumen no trajo ninguna unidad.");
+
+  DATA = {};
+  for(const placa of unidades){
+    const respDetalle = await fetch(CONFIG.API_URL+"?vista=detalle&placa="+encodeURIComponent(placa)+"&token="+encodeURIComponent(SESSION_TOKEN));
+    const detalle = await respDetalle.json();
+    if(detalle.error) throw new Error(detalle.error);
+    DATA[placa] = detalle;
+  }
 }
 
 function buildHomeCards(){
@@ -629,11 +709,8 @@ function init(){
   });
   buildHomeCards();
 
-  const unidades=Object.keys(DATA);
-  const sel=document.getElementById("unitSelect");
-  const optTodas=document.createElement("option"); optTodas.value="TODAS"; optTodas.textContent="TODAS LAS UNIDADES"; sel.appendChild(optTodas);
-  unidades.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=p; sel.appendChild(o); });
-  sel.value=unidadActual; sel.addEventListener("change",e=>{ unidadActual=e.target.value; buildDiaSelector(); render(); });
+  poblarSelectorUnidades();
+  document.getElementById("unitSelect").addEventListener("change",e=>{ unidadActual=e.target.value; buildDiaSelector(); render(); });
 
   document.querySelectorAll(".nav-item[data-cat]").forEach(el=>{
     el.addEventListener("click",()=> mostrarApp(el.dataset.cat));
@@ -685,35 +762,44 @@ function filtrarPorPeriodo(arr){
   return arr.filter(f=>{ const d=parseFechaDDMMYYYY(f.fecha); if(d.getFullYear()!==anioActual||d.getMonth()!==mesActual) return false; if(diaSeleccionado!==null&&d.getDate()!==diaSeleccionado) return false; return true; });
 }
 
-// Serie de estadísticas (rpm/carga/oil/coolant/manifold) para la unidad actual, o promedio de flota si "TODAS"
+// Serie de estadísticas (rpm/carga/oil/coolant/manifold) para la unidad actual, tomada
+// directo de "diario" (ya viene fusionada, sin cruzar nada) — o promedio de flota si "TODAS"
+const CAMPO_STATS = {
+  rpm: ["rpm_min","rpm_prom","rpm_max"],
+  carga: ["carga_min","carga_prom","carga_max"],
+  oil: ["aceite_min","aceite_prom","aceite_max"],
+  coolant: ["temperatura_min","temperatura_prom","temperatura_max"],
+  manifold: ["admision_min","admision_prom","admision_max"]
+};
 function getStatsSerie(tipo){
+  const [cMin,cProm,cMax]=CAMPO_STATS[tipo];
   if(unidadActual==="TODAS"){
     const unidades=Object.keys(DATA);
     const porFecha={};
     unidades.forEach(p=>{
-      (DATA[p][tipo]||[]).forEach(f=>{ (porFecha[f.fecha]=porFecha[f.fecha]||[]).push(f); });
+      (DATA[p].diario||[]).forEach(f=>{ (porFecha[f.fecha]=porFecha[f.fecha]||[]).push(f); });
     });
     return Object.keys(porFecha).map(fecha=>{
-      const filas=porFecha[fecha].filter(f=>num(f.prom)>0);
-      if(filas.length===0) return {fecha, placa:"TODAS", min:"0.00", prom:"0.00", max:"0.00"};
-      const avg=key=>(filas.reduce((a,f)=>a+num(f[key]),0)/filas.length).toFixed(2);
-      return {fecha, placa:"TODAS", min:avg("min"), prom:avg("prom"), max:avg("max")};
+      const filas=porFecha[fecha].filter(f=>num(f[cProm])>0);
+      if(filas.length===0) return {fecha, placa:"TODAS", min:0, prom:0, max:0};
+      const avg=key=>(filas.reduce((a,f)=>a+num(f[key]),0)/filas.length);
+      return {fecha, placa:"TODAS", min:avg(cMin), prom:avg(cProm), max:avg(cMax)};
     });
   }
-  return (DATA[unidadActual] && DATA[unidadActual][tipo]) || [];
+  return ((DATA[unidadActual] && DATA[unidadActual].diario) || []).map(f=>({fecha:f.fecha, placa:f.placa, min:f[cMin], prom:f[cProm], max:f[cMax]}));
 }
 
-// Serie diaria de ECM ya calculada (galones/horas/km/etc.) para la unidad actual, o SUMA de flota si "TODAS"
+// Serie diaria ya reconciliada (km/horas motor/ralentí/combustible) directo de "diario"
+// — para "TODAS" se SUMA entre unidades, igual que antes.
 function getEcmDiasSerie(){
   if(unidadActual==="TODAS"){
     const unidades=Object.keys(DATA);
     const porFecha={};
     unidades.forEach(p=>{
-      (DATA[p].ecm||[]).forEach(fila=>{
-        const dd=calcularDiaECM(fila);
-        if(!porFecha[dd.fecha]) porFecha[dd.fecha]={fecha:dd.fecha, placa:"TODAS", galones:0, horasMotor:0, horasRalenti:0, km:0, unidadesConDato:0};
-        const acc=porFecha[dd.fecha];
-        acc.galones+=dd.galones; acc.horasMotor+=dd.horasMotor; acc.horasRalenti+=dd.horasRalenti; acc.km+=dd.km; acc.unidadesConDato+=1;
+      (DATA[p].diario||[]).forEach(f=>{
+        if(!porFecha[f.fecha]) porFecha[f.fecha]={fecha:f.fecha, placa:"TODAS", galones:0, horasMotor:0, horasRalenti:0, km:0, unidadesConDato:0};
+        const acc=porFecha[f.fecha];
+        acc.galones+=num(f.combustible_total); acc.horasMotor+=num(f.horas_motor); acc.horasRalenti+=num(f.horas_ralenti); acc.km+=num(f.km); acc.unidadesConDato+=1;
       });
     });
     return Object.values(porFecha).map(o=>({
@@ -722,10 +808,14 @@ function getEcmDiasSerie(){
       tiempoMuerto: Math.max(24*o.unidadesConDato - o.horasMotor, 0)
     }));
   }
-  return ((DATA[unidadActual] && DATA[unidadActual].ecm) || []).map(calcularDiaECM);
+  return ((DATA[unidadActual] && DATA[unidadActual].diario) || []).map(f=>({
+    fecha:f.fecha, placa:f.placa, galones:num(f.combustible_total), horasMotor:num(f.horas_motor),
+    horasRalenti:num(f.horas_ralenti), km:num(f.km), horasConduccion:num(f.horas_conduccion),
+    tiempoMuerto: Math.max(24-num(f.horas_motor),0)
+  }));
 }
 
-// Fallas de la unidad actual, o de TODAS combinadas
+// Fallas de la unidad actual (ya vienen agrupadas por día+SPN+FMI con "cantidad"), o de TODAS combinadas
 function getFallasSerie(){
   if(unidadActual==="TODAS"){
     return Object.keys(DATA).flatMap(p=>DATA[p].fallas||[]);
@@ -795,17 +885,6 @@ function renderMotor(){
 }
 
 const LITROS_A_GALONES = 0.264172;
-
-// Helper: cálculos diarios reales a partir de inicio/fin de la misma fila (no cruza días)
-function calcularDiaECM(fila){
-  const galones = (num(fila.fuel_fin) - num(fila.fuel_inicio)) * LITROS_A_GALONES;
-  const horasMotor = num(fila.horas_fin) - num(fila.horas_inicio);
-  const horasRalenti = num(fila.ralenti_fin) - num(fila.ralenti_inicio);
-  const km = num(fila.odometro_fin) - num(fila.odometro_inicio);
-  const horasConduccion = Math.max(horasMotor - horasRalenti, 0);
-  const tiempoMuerto = Math.max(24 - horasMotor, 0);
-  return { fecha:fila.fecha, placa:fila.placa, galones, horasMotor, horasRalenti, km, horasConduccion, tiempoMuerto };
-}
 
 function renderConsumoMotor(){
   const dias = filtrarPorPeriodo(getEcmDiasSerie());
@@ -881,14 +960,14 @@ function renderUsoFlota(){
 }
 
 function renderSeguridad(){
-  const fallasPeriodo=filtrarPorPeriodo(getFallasSerie().map(f=>({...f,fecha:f.fecha_hora.split(" ")[0]})));
-  document.getElementById("tablaFallas").innerHTML=`<tr style="color:var(--text-dim);text-align:left;border-bottom:1px solid var(--line);"><th style="padding:8px 6px;">Fecha/Hora</th><th style="padding:8px 6px;">Diagnóstico</th><th style="padding:8px 6px;">Controlador</th><th style="padding:8px 6px;">Código</th></tr>`+
-    fallasPeriodo.slice(0,15).map(f=>`<tr style="border-bottom:1px solid var(--line);"><td class="mono" style="padding:8px 6px;color:var(--text-secondary);">${f.fecha_hora}</td><td style="padding:8px 6px;">${f.diagnostico}</td><td style="padding:8px 6px;color:var(--text-secondary);">${f.controlador}</td><td class="mono" style="padding:8px 6px;color:var(--brand);">${f.codigo_diagnostico}</td></tr>`).join("");
+  const fallasPeriodo=filtrarPorPeriodo(getFallasSerie()).sort((a,b)=>b.cantidad-a.cantidad);
+  document.getElementById("tablaFallas").innerHTML=`<tr style="color:var(--text-dim);text-align:left;border-bottom:1px solid var(--line);"><th style="padding:8px 6px;">Fecha</th><th style="padding:8px 6px;">Diagnóstico</th><th style="padding:8px 6px;">Controlador</th><th style="padding:8px 6px;">Código</th><th style="padding:8px 6px;text-align:right;">Cantidad</th></tr>`+
+    fallasPeriodo.slice(0,15).map(f=>`<tr style="border-bottom:1px solid var(--line);"><td class="mono" style="padding:8px 6px;color:var(--text-secondary);">${f.fecha}</td><td style="padding:8px 6px;">${f.diagnostico}</td><td style="padding:8px 6px;color:var(--text-secondary);">${f.controlador}</td><td class="mono" style="padding:8px 6px;color:var(--brand);">${f.codigo_diagnostico}-${f.codigo_falla}</td><td class="mono" style="padding:8px 6px;text-align:right;">${f.cantidad}</td></tr>`).join("");
 }
 
 function renderTicker(){
   const recientes=getFallasSerie().slice(-14);
-  const html=recientes.map(f=>`<span class="ticker-item"><span class="t-dot"></span><span class="t-code mono">${f.codigo_diagnostico}</span> ${f.diagnostico} — ${f.placa} · ${f.fecha_hora}</span>`).join("");
+  const html=recientes.map(f=>`<span class="ticker-item"><span class="t-dot"></span><span class="t-code mono">${f.codigo_diagnostico}-${f.codigo_falla}</span> ${f.diagnostico} — ${f.placa} · ${f.fecha} · x${f.cantidad}</span>`).join("");
   document.getElementById("tickerTrack").innerHTML=html+html;
 }
 
