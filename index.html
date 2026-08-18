@@ -517,6 +517,18 @@ function parseFechaDDMMYYYY(str){ const [d,m,y]=str.split("/").map(Number); retu
 
 let DATA={}, unidadActual="TODAS", categoriaActual="motor", subvistaActual="variables";
 let anioActual=2026, mesActual=new Date().getMonth(), diaSeleccionado=null;
+// Ajusta anioActual/mesActual al mes del dato MÁS RECIENTE que realmente exista en DATA,
+// en vez de depender de la fecha real de la computadora (que puede no calzar con el histórico cargado).
+function ajustarPeriodoAUltimoDato(){
+  let masReciente=null;
+  Object.values(DATA).forEach(u=>{
+    (u.diario||[]).forEach(f=>{
+      const d=parseFechaDDMMYYYY(f.fecha);
+      if(!masReciente || d>masReciente) masReciente=d;
+    });
+  });
+  if(masReciente){ anioActual=masReciente.getFullYear(); mesActual=masReciente.getMonth(); diaSeleccionado=null; }
+}
 let metricaActual="prom"; // min | prom | max
 const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const COLORS={ok:"#2DD9A0",warn:"#FFB020",crit:"#FF3B3B",brand:"#CC0000"};
@@ -598,6 +610,8 @@ async function intentarLogin(){
   btn.textContent="Cargando datos..."; btn.disabled=true;
   try{
     await cargarDatosReales();
+    ajustarPeriodoAUltimoDato();
+    sincronizarSelectoresPeriodo();
     poblarSelectorUnidades();
     mostrarHome();
   }catch(e){
@@ -680,6 +694,7 @@ function init(){
   ajustarAltoAppRoot();
   boot();
   DATA=CONFIG.USAR_DATOS_DEMO?generarDatosDemo():{};
+  if(CONFIG.USAR_DATOS_DEMO) ajustarPeriodoAUltimoDato();
   document.querySelectorAll(".brand-bg, .hero-media").forEach(el=>{
     el.style.setProperty("--brand-bg-url", `url('${CONFIG.CLIENT_BG_URL}')`);
   });
@@ -746,6 +761,15 @@ function buildAnioMesSelectors(){
   selM.value=mesActual;
   selA.addEventListener("change",e=>{ anioActual=parseInt(e.target.value); diaSeleccionado=null; buildDiaSelector(); render(); });
   selM.addEventListener("change",e=>{ mesActual=parseInt(e.target.value); diaSeleccionado=null; buildDiaSelector(); render(); });
+  buildDiaSelector();
+}
+
+// Solo sincroniza los <select> con anioActual/mesActual ya calculados — no vuelve a
+// agregar opciones (evita duplicar el dropdown si se llama después del login real).
+function sincronizarSelectoresPeriodo(){
+  const selA=document.getElementById("selAnio"), selM=document.getElementById("selMes");
+  if(selA) selA.value=anioActual;
+  if(selM) selM.value=mesActual;
   buildDiaSelector();
 }
 
@@ -837,7 +861,6 @@ function render(){
   document.getElementById("placaLabel").textContent = unidadActual==="TODAS" ? "TODAS LAS UNIDADES" : unidadActual;
   document.getElementById("statTotal").textContent=Object.keys(DATA).length;
   document.getElementById("selInfo").textContent=diaSeleccionado?`Día ${diaSeleccionado} de ${MESES[mesActual]}`:`${MESES[mesActual]} ${anioActual} · mes completo (promedios)`;
-  document.getElementById("btnMesCompleto").classList.toggle("active",diaSeleccionado===null);
 
   if(categoriaActual==="motor") renderMotor();
   if(categoriaActual==="operacion") renderOperacion();
