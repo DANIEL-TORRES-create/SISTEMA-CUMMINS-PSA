@@ -70,10 +70,11 @@
 #appRoot .brand-text .name {font-family:'IBM Plex Mono';font-weight:700;font-size:14px;letter-spacing:.08em;}
 #appRoot .brand-text .sub {color:var(--text-dim);font-size:10px;letter-spacing:.08em;margin-top:1px;}
 #appRoot .topbar-stats {display:flex;gap:26px;margin-left:auto;align-items:center;}
-#appRoot .stat-chip {display:flex;flex-direction:column;align-items:flex-end;}
+#appRoot .stat-chip {display:flex;flex-direction:column;align-items:center;}
 #appRoot .stat-chip .val {font-family:'IBM Plex Mono';font-weight:600;font-size:16px;}
 #appRoot .stat-chip .lbl {font-size:10px;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;}
 #appRoot .stat-chip.alert .val {color:var(--brand);}
+#appRoot .stat-chip.update {align-items:flex-start;border-left:1px solid var(--line);padding-left:20px;}
 #appRoot .unit-switcher {
     background:var(--bg-raised); border:1px solid var(--line); border-radius:var(--radius);
     padding:8px 14px; display:flex; align-items:center; gap:10px;
@@ -266,6 +267,17 @@
   /* ===== LOGIN: SPINNER EN BOTÓN ===== */
 #appRoot .login-btn:disabled {opacity:.45;cursor:not-allowed;}
 #appRoot .btn-spinner {display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid #0A193044;border-top-color:#0A1930;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
+
+  /* ===== HOME: TARJETAS DE RESUMEN (basadas en los últimos 3 meses) ===== */
+#appRoot .resumen-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:22px;}
+#appRoot .resumen-card {
+    background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:16px 18px;cursor:pointer;
+    transition:box-shadow .15s, transform .15s, background .15s; border-left:4px solid var(--rc-color, var(--accent));
+  }
+#appRoot .resumen-card:hover {box-shadow:0 8px 22px #00000030;transform:translateY(-2px);background:var(--bg-raised);}
+#appRoot .resumen-card .rc-lbl {font-size:10px;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+#appRoot .resumen-card .rc-val {font-family:'IBM Plex Mono';font-weight:700;font-size:22px;display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+#appRoot .resumen-card .rc-frase {font-size:12px;color:var(--text-secondary);line-height:1.4;}
 </style>
 
 <div id="appRoot" style="position:relative;width:100%;height:100vh;overflow:hidden;">
@@ -318,6 +330,7 @@
     </div>
   </div>
   <div class="home-body">
+    <div class="resumen-grid" id="resumenGrid"></div>
     <div class="cat-grid" id="catGrid"></div>
     <div class="home-footer">Selecciona una categoría o un indicador específico para ver el detalle</div>
   </div>
@@ -336,6 +349,7 @@
   <div class="unit-switcher"><span class="mono" style="font-size:11px;color:var(--text-dim);">UNIDAD</span><select id="unitSelect"></select></div>
   <div class="topbar-stats">
     <div class="stat-chip"><span class="val mono" id="statTotal">--</span><span class="lbl">Unidades</span></div>
+    <div class="stat-chip update"><span class="val mono" id="statUltimaActualizacion" style="font-size:13px;">--</span><span class="lbl">Última actualización</span></div>
   </div>
 </div>
 
@@ -399,8 +413,8 @@
         <div class="panel" style="margin-top:14px;">
           <div class="panel-title between">
             <span>Comparativa por Unidad y Mes (promedio)</span>
-            <select class="dn-select" id="selVarMatriz"></select>
           </div>
+          <div class="var-selector" id="varSelectorMatriz"></div>
           <div class="compare-wrap"><table class="compare-table" id="tablaMatrizMotor"></table></div>
         </div>
       </div>
@@ -439,14 +453,42 @@
         </div>
         <div class="row2">
           <div class="panel"><div class="panel-title">Resumen del período</div><div class="kpi-list" id="kpiEncendidos"></div></div>
-          <div class="panel"><div class="panel-title">Comparativo</div><div class="kpi-list" id="kpiEncendidosComp"></div></div>
+          <div class="panel"><div class="panel-title">Comparativo mes a mes y por unidad</div><div class="kpi-list" id="kpiEncendidosComp"></div></div>
         </div>
       </div>
     </div>
 
     <div id="viewOperacion" style="display:none;">
       <div class="row2" style="grid-template-columns:1fr;">
-        <div class="panel"><div class="panel-title" id="tituloTrendOperacion">Horas motor acumuladas</div><div class="trend-chart" id="trendOperacion" style="height:260px;"></div></div>
+        <div class="panel">
+          <div class="panel-title between">
+            <span id="tituloTrendOperacion">Horas motor acumuladas</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;" id="operacionToggles">
+              <div class="view-toggle" id="rendimientoMetricaToggle" style="display:none;">
+                <div class="v-opt active" data-v="galhora">gal/hora</div>
+                <div class="v-opt" data-v="kmgal">km/gal</div>
+              </div>
+              <div class="view-toggle" id="rendimientoViewToggle" style="display:none;">
+                <div class="v-opt active" data-v="diario">Diario</div>
+                <div class="v-opt" data-v="mensual">Mensual</div>
+                <div class="v-opt" data-v="unidad">Por Unidad</div>
+              </div>
+            </div>
+          </div>
+          <div class="trend-chart" id="trendOperacion" style="height:260px;"></div>
+        </div>
+      </div>
+      <div class="row2" id="usoFlotaBarrasRow" style="display:none;grid-template-columns:1fr;">
+        <div class="panel">
+          <div class="panel-title between">
+            <span>Composición diaria de horas</span>
+            <div class="view-toggle" id="usoFlotaViewToggle">
+              <div class="v-opt active" data-v="diario">Diario</div>
+              <div class="v-opt" data-v="mensual">Mensual</div>
+            </div>
+          </div>
+          <div class="trend-chart" id="trendUsoFlotaBarras" style="height:220px;"></div>
+        </div>
       </div>
       <div class="row2">
         <div class="panel"><div class="panel-title" id="tituloKpiOperacion">Productividad del período</div><div class="kpi-list" id="kpiOperacion"></div></div>
@@ -459,12 +501,55 @@
       <div class="sev-grid" id="sevGrid"></div>
       <div id="alertaCriticaBanner"></div>
       <div class="row2">
-        <div class="panel"><div class="panel-title">Fallas más frecuentes del período</div><div id="topFallasList"></div></div>
+        <div class="panel">
+          <div class="panel-title between">
+            <span>Fallas más frecuentes del período</span>
+            <div class="view-toggle" id="sevFiltroTop">
+              <div class="v-opt active" data-v="todas">Todas</div>
+              <div class="v-opt" data-v="critica">Crítica</div>
+              <div class="v-opt" data-v="advertencia">Advertencia</div>
+              <div class="v-opt" data-v="informativa">Informativa</div>
+            </div>
+          </div>
+          <div id="topFallasList"></div>
+        </div>
         <div class="panel"><div class="panel-title">Tendencia críticas (mes vs mes anterior)</div><div class="kpi-list" id="kpiTendenciaFallas"></div></div>
+      </div>
+      <div class="row2" style="grid-template-columns:1fr;">
+        <div class="panel">
+          <div class="panel-title between">
+            <span>Cantidad de fallas</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <div class="view-toggle" id="sevFiltroChart">
+                <div class="v-opt active" data-v="todas">Todas</div>
+                <div class="v-opt" data-v="critica">Crítica</div>
+                <div class="v-opt" data-v="advertencia">Advertencia</div>
+                <div class="v-opt" data-v="informativa">Informativa</div>
+              </div>
+              <div class="view-toggle" id="fallasViewToggle">
+                <div class="v-opt active" data-v="diario">Diario</div>
+                <div class="v-opt" data-v="mensual">Mensual</div>
+                <div class="v-opt" data-v="unidad">Por Unidad</div>
+              </div>
+            </div>
+          </div>
+          <div class="trend-chart" id="trendFallas" style="height:220px;"></div>
+        </div>
+      </div>
+      <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-title">¿Cómo se clasifica la severidad?</div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.7;">
+          Clasificación según el estándar <b>SAE J1939</b>, a partir del código <b>FMI</b> (Failure Mode Identifier) de cada falla:
+          <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;">
+            <span><span class="top-falla-badge" style="background:#FF3B3B22;color:var(--crit);">Crítica</span> FMI 0, 1, 7, 12</span>
+            <span><span class="top-falla-badge" style="background:#FFB02022;color:var(--warn);">Advertencia</span> FMI 2, 15, 16, 17, 18</span>
+            <span><span class="top-falla-badge" style="background:#C7C7CA22;color:var(--text-secondary);">Informativa</span> Cualquier otro FMI</span>
+          </div>
+        </div>
       </div>
       <div class="panel" style="margin-top:14px;">
         <div class="panel-title">Detalle de fallas del período (orden cronológico)</div>
-        <div class="compare-wrap"><table class="compare-table" id="tablaFallas"></table></div>
+        <div class="compare-wrap" style="max-height:340px;overflow-y:auto;"><table class="compare-table" id="tablaFallas"></table></div>
       </div>
     </div>
   </div>
@@ -607,6 +692,7 @@ function parseFechaDDMMYYYY(str){ const [d,m,y]=str.split("/").map(Number); retu
 
 let DATA={}, unidadActual="TODAS", categoriaActual="motor", subvistaActual="variables";
 let anioActual=2026, mesActual=new Date().getMonth(), diaSeleccionado=null;
+let fechaUltimoDato=null; // fecha (Date) del dato más reciente en "diario", entre todas las unidades — para el topbar
 // Ajusta anioActual/mesActual al mes del dato MÁS RECIENTE que realmente exista en DATA,
 // en vez de depender de la fecha real de la computadora (que puede no calzar con el histórico cargado).
 function ajustarPeriodoAUltimoDato(){
@@ -617,6 +703,7 @@ function ajustarPeriodoAUltimoDato(){
       if(!masReciente || d>masReciente) masReciente=d;
     });
   });
+  fechaUltimoDato=masReciente;
   if(masReciente){ anioActual=masReciente.getFullYear(); mesActual=masReciente.getMonth(); diaSeleccionado=null; }
 }
 let metricaActual="prom"; // min | prom | max
@@ -734,6 +821,7 @@ async function intentarLogin(){
     ajustarPeriodoAUltimoDato();
     sincronizarSelectoresPeriodo();
     poblarSelectorUnidades();
+    renderResumenHome();
     mostrarHome();
   }catch(e){
     err.textContent="No se pudieron cargar los datos: "+e.message;
@@ -805,16 +893,23 @@ function on(id, ev, fn){
 function ajustarAltoAppRoot(){
   const root = document.getElementById("appRoot");
   if(!root) return;
+  // clientHeight del <html> ya excluye cualquier scrollbar externo que MyGeotab esté mostrando
+  // en ese momento — es una medida más confiable que window.innerHeight para este cálculo.
+  const alturaViewport = document.documentElement.clientHeight || window.innerHeight;
   const offsetTop = root.getBoundingClientRect().top;
-  // Se descuenta un margen extra (18px) para que nunca dispare el scroll de la página que lo contiene
-  // (bordes, redondeos de subpíxel y el propio padding de MyGeotab suman unos pocos px de más).
-  const altoDisponible = window.innerHeight - offsetTop - 18;
+  // Margen de seguridad más generoso: evita que redondeos de subpíxel, bordes o el padding
+  // propio de MyGeotab terminen sumando el pixel de más que dispara su scroll exterior.
+  const altoDisponible = alturaViewport - offsetTop - 24;
   root.style.height = Math.max(altoDisponible, 480) + "px";
 }
 window.addEventListener("resize", ajustarAltoAppRoot);
 
 function init(){
   ajustarAltoAppRoot();
+  // MyGeotab a veces sigue acomodando su propio layout un instante después de la carga inicial;
+  // se reintenta un par de veces más para no quedarnos con una medición tomada demasiado temprano.
+  setTimeout(ajustarAltoAppRoot, 300);
+  setTimeout(ajustarAltoAppRoot, 1000);
   boot();
   DATA=CONFIG.USAR_DATOS_DEMO?generarDatosDemo():{};
   if(CONFIG.USAR_DATOS_DEMO) ajustarPeriodoAUltimoDato();
@@ -848,6 +943,7 @@ function init(){
     e.target.textContent = video.muted ? "🔇 Activar sonido" : "🔊 Sonido activado";
   });
   buildHomeCards();
+  renderResumenHome();
 
   poblarSelectorUnidades();
   document.getElementById("unitSelect").addEventListener("change",e=>{ unidadActual=e.target.value; buildDiaSelector(); render(); });
@@ -1016,6 +1112,8 @@ function render(){
   if(!DATA[unidadActual] && unidadActual!=="TODAS") return;
   document.getElementById("placaLabel").textContent = unidadActual==="TODAS" ? "TODAS LAS UNIDADES" : unidadActual;
   document.getElementById("statTotal").textContent=Object.keys(DATA).length;
+  const elUlt=document.getElementById("statUltimaActualizacion");
+  if(elUlt) elUlt.textContent = fechaUltimoDato ? ("0"+fechaUltimoDato.getDate()).slice(-2)+"/"+("0"+(fechaUltimoDato.getMonth()+1)).slice(-2)+"/"+fechaUltimoDato.getFullYear() : "—";
   document.getElementById("selInfo").textContent=diaSeleccionado?`Día ${diaSeleccionado} de ${MESES[mesActual]}`:`${MESES[mesActual]} ${anioActual} · mes completo (promedios)`;
 
   if(categoriaActual==="motor") renderMotor();
@@ -1115,27 +1213,47 @@ function porUnidadTotales(camposASumar){
   });
 }
 
-/* ================= VARIABLES DE MOTOR ================= */
-let variablesSeleccionadas=["rpm"];
-const VAR_LABELS={rpm:"RPM",oil:"Aceite",coolant:"Refrigerante",carga:"Carga",manifold:"Admisión"};
+/* ================= HELPERS DE FORMATO Y ZOOM ================= */
+function r2(v){ const n=num(v); return Math.round(n*100)/100; } // redondeo a 2 decimales, siempre
+// Ventana inicial de dataZoom: muestra como máximo "maxVisible" puntos arrancando desde el final
+// (los más recientes), el resto queda accesible con scroll/zoom — así el gráfico nunca arranca encogido.
+function initialZoomRange(totalPoints, maxVisible=15){
+  if(totalPoints<=maxVisible) return {start:0, end:100};
+  const start = (1 - maxVisible/totalPoints) * 100;
+  return {start, end:100};
+}
+function dataZoomConfig(totalPoints, maxVisible=15){
+  const {start,end}=initialZoomRange(totalPoints, maxVisible);
+  return [{type:'inside', start, end}, {type:'slider', height:12, bottom:4, start, end}];
+}
 
-function buildVarSelector(){
-  const cont=document.getElementById("varSelector"); if(!cont) return;
+/* ================= SELECTOR DE VARIABLES GENÉRICO (chips multi-selección, reutilizable) ================= */
+function buildVarSelectorGeneric(containerId, seleccionadas, onChange){
+  const cont=document.getElementById(containerId); if(!cont) return;
   cont.innerHTML="";
   GAUGES_CONFIG.forEach(g=>{
     const color=resolveColor(g.color);
     const chip=document.createElement("div");
-    chip.className="var-chip"+(variablesSeleccionadas.includes(g.id)?" active":"");
+    chip.className="var-chip"+(seleccionadas.includes(g.id)?" active":"");
     chip.style.setProperty("--chip-color", color);
     chip.innerHTML=`<span class="dot" style="background:${color};"></span>${VAR_LABELS[g.id]}`;
     chip.addEventListener("click",()=>{
-      if(variablesSeleccionadas.includes(g.id)){
-        if(variablesSeleccionadas.length>1) variablesSeleccionadas=variablesSeleccionadas.filter(v=>v!==g.id);
-      } else { variablesSeleccionadas=[...variablesSeleccionadas, g.id]; }
-      buildVarSelector(); renderMotorVariables();
+      if(seleccionadas.includes(g.id)){
+        if(seleccionadas.length>1) seleccionadas.splice(0, seleccionadas.length, ...seleccionadas.filter(v=>v!==g.id));
+      } else { seleccionadas.push(g.id); }
+      onChange();
     });
     cont.appendChild(chip);
   });
+}
+
+/* ================= VARIABLES DE MOTOR ================= */
+let variablesSeleccionadas=["rpm"];
+let variablesMatrizSeleccionadas=["rpm"];
+const VAR_LABELS={rpm:"RPM",oil:"Aceite",coolant:"Refrigerante",carga:"Carga",manifold:"Admisión"};
+
+function buildVarSelector(){
+  buildVarSelectorGeneric("varSelector", variablesSeleccionadas, renderMotorVariables);
 }
 
 function renderMotorVariables(){
@@ -1148,7 +1266,7 @@ function renderMotorVariables(){
   const series = variablesSeleccionadas.map(vid=>{
     const g=GAUGES_CONFIG.find(x=>x.id===vid);
     const serie=filtrarPorPeriodo(getStatsSerie(vid));
-    const valores=serie.map(f=>num(f[metricaActual]));
+    const valores=serie.map(f=>r2(f[metricaActual]));
     const color=resolveColor(g.color);
     return {name:VAR_LABELS[vid], type:'line', smooth:true, data:valores, itemStyle:{color}, lineStyle:{width:2}, symbol:'circle', symbolSize:5, areaStyle: multiple?undefined:{color:color+"22"}};
   });
@@ -1158,8 +1276,8 @@ function renderMotorVariables(){
   trend.setOption({
     grid:{left:44,right:20,top:multiple?34:16,bottom:34},
     legend: multiple ? {top:0,textStyle:{color:'#A8A8AC',fontSize:10}} : undefined,
-    tooltip:{trigger:'axis',backgroundColor:'var(--bg-panel)',borderColor:'var(--line)',textStyle:{color:'#E8E8EA',fontSize:11}},
-    dataZoom:[{type:'inside'},{type:'slider',height:12,bottom:4}],
+    tooltip:{trigger:'axis',backgroundColor:'var(--bg-panel)',borderColor:'var(--line)',textStyle:{color:'#E8E8EA',fontSize:11},valueFormatter:v=>Number(v).toFixed(2)},
+    dataZoom:dataZoomConfig(fechas.length),
     xAxis:{type:'category',data:fechas,axisLine:{lineStyle:{color:'#454649'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
     yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
     series
@@ -1167,37 +1285,36 @@ function renderMotorVariables(){
 
   const rpmV=valorSegunMetrica(getStatsSerie("rpm")), oilV=valorSegunMetrica(getStatsSerie("oil")), coolV=valorSegunMetrica(getStatsSerie("coolant")), cargaV=valorSegunMetrica(getStatsSerie("carga"));
   document.getElementById("kpiMotor").innerHTML=`
-    <div class="kpi-row"><span class="k-lbl">RPM (${metricaActual})</span><span class="k-val mono">${rpmV.toFixed(0)}</span></div>
-    <div class="kpi-row"><span class="k-lbl">Aceite (${metricaActual})</span><span class="k-val mono ${oilV<20?'warn':'ok'}">${oilV.toFixed(1)} PSI</span></div>
-    <div class="kpi-row"><span class="k-lbl">Refrigerante (${metricaActual})</span><span class="k-val mono ${coolV>100?'crit':'ok'}">${coolV.toFixed(1)} °C</span></div>
-    <div class="kpi-row"><span class="k-lbl">Carga motor (${metricaActual})</span><span class="k-val mono">${cargaV.toFixed(1)}%</span></div>`;
+    <div class="kpi-row"><span class="k-lbl">RPM (${metricaActual})</span><span class="k-val mono">${rpmV.toFixed(2)}</span></div>
+    <div class="kpi-row"><span class="k-lbl">Aceite (${metricaActual})</span><span class="k-val mono ${oilV<20?'warn':'ok'}">${oilV.toFixed(2)} PSI</span></div>
+    <div class="kpi-row"><span class="k-lbl">Refrigerante (${metricaActual})</span><span class="k-val mono ${coolV>100?'crit':'ok'}">${coolV.toFixed(2)} °C</span></div>
+    <div class="kpi-row"><span class="k-lbl">Carga motor (${metricaActual})</span><span class="k-val mono">${cargaV.toFixed(2)}%</span></div>`;
 
   renderMatrizVariables();
 }
 
-// Comparativa Unidad x Mes — siempre en PROMEDIO (evita saturar con min/max), para la variable elegida en el select
+// Comparativa Unidad x Mes — multi-variable (una fila por combinación mes+variable), siempre en PROMEDIO
 function renderMatrizVariables(){
-  const sel=document.getElementById("selVarMatriz"); if(!sel) return;
-  if(sel.options.length===0){
-    GAUGES_CONFIG.forEach(g=>{ const o=document.createElement("option"); o.value=g.id; o.textContent=VAR_LABELS[g.id]; sel.appendChild(o); });
-    sel.value=variablesSeleccionadas[0];
-    sel.addEventListener("change", renderMatrizVariables);
-  }
-  const varId=sel.value;
-  const [,cProm] = CAMPO_STATS[varId];
+  buildVarSelectorGeneric("varSelectorMatriz", variablesMatrizSeleccionadas, renderMatrizVariables);
+
   const mesesDisponibles=[...obtenerMesesDisponibles()].sort();
   const unidades=Object.keys(DATA);
 
-  let html="<tr><th>Mes</th>"+unidades.map(p=>`<th>${p}</th>`).join("")+"</tr>";
+  let html="<tr><th>Mes</th><th>Variable</th>"+unidades.map(p=>`<th>${p}</th>`).join("")+"</tr>";
   mesesDisponibles.forEach(clave=>{
     const [y,m]=clave.split("-").map(Number);
-    html+=`<tr><td class="mono">${MESES[m].slice(0,3)} ${y}</td>`;
-    unidades.forEach(p=>{
-      const filas=(DATA[p].diario||[]).filter(f=>{const d=parseFechaDDMMYYYY(f.fecha); return d.getFullYear()===y&&d.getMonth()===m&&num(f[cProm])>0;});
-      const val=filas.length? (filas.reduce((a,f)=>a+num(f[cProm]),0)/filas.length) : null;
-      html+=`<td class="mono">${val!==null?val.toFixed(1):'—'}</td>`;
+    variablesMatrizSeleccionadas.forEach(varId=>{
+      const g=GAUGES_CONFIG.find(x=>x.id===varId);
+      const color=resolveColor(g.color);
+      const [,cProm]=CAMPO_STATS[varId];
+      html+=`<tr><td class="mono">${MESES[m].slice(0,3)} ${y}</td><td><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;"></span>${VAR_LABELS[varId]}</span></td>`;
+      unidades.forEach(p=>{
+        const filas=(DATA[p].diario||[]).filter(f=>{const d=parseFechaDDMMYYYY(f.fecha); return d.getFullYear()===y&&d.getMonth()===m&&num(f[cProm])>0;});
+        const val=filas.length? (filas.reduce((a,f)=>a+num(f[cProm]),0)/filas.length) : null;
+        html+=`<td class="mono">${val!==null?val.toFixed(2):'—'}</td>`;
+      });
+      html+="</tr>";
     });
-    html+="</tr>";
   });
   document.getElementById("tablaMatrizMotor").innerHTML=html;
 }
@@ -1236,36 +1353,37 @@ function renderConsumoMotor(){
     const dias = filtrarPorPeriodo(getEcmDiasSerie());
     const fechas = dias.map(f=>f.fecha.split("/")[0]);
     chart.setOption({grid:{left:45,right:50,top:30,bottom:34},
-      tooltip:{trigger:'axis'}, legend:{data:['Galones','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
-      dataZoom:[{type:'inside'},{type:'slider',height:12,bottom:4}],
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)}, legend:{data:['Galones','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'gal',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Galones',type:'bar',data:dias.map(f=>f.galones),itemStyle:{color:COLORS.accent}},
-        {name:'Horas motor',type:'line',yAxisIndex:1,data:dias.map(f=>f.horasMotor),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2}}
+        {name:'Galones',type:'bar',data:dias.map(f=>r2(f.galones)),itemStyle:{color:COLORS.accent}},
+        {name:'Horas motor',type:'line',yAxisIndex:1,data:dias.map(f=>r2(f.horasMotor)),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2}}
       ]},true);
   } else if(consumoVista==="mensual"){
     const porMes=agruparPorMes(getDiarioSerieCompleta(),["galones","horasMotor"]);
     chart.setOption({grid:{left:45,right:50,top:30,bottom:50},
-      tooltip:{trigger:'axis'}, legend:{data:['Galones','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)}, legend:{data:['Galones','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:[{type:'value',name:'gal',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Galones',type:'bar',data:porMes.map(m=>m.galones),itemStyle:{color:COLORS.accent}},
-        {name:'Horas motor',type:'line',yAxisIndex:1,data:porMes.map(m=>m.horasMotor),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2}}
+        {name:'Galones',type:'bar',data:porMes.map(m=>r2(m.galones)),itemStyle:{color:COLORS.accent}},
+        {name:'Horas motor',type:'line',yAxisIndex:1,data:porMes.map(m=>r2(m.horasMotor)),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2}}
       ]},true);
   } else {
     const porUnidad=porUnidadTotales(["galones","horasMotor"]);
     chart.setOption({grid:{left:60,right:50,top:30,bottom:34},
-      tooltip:{trigger:'axis'}, legend:{data:['Galones','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)}, legend:{data:['Galones','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      dataZoom:dataZoomConfig(porUnidad.length),
       xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'gal',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Galones',type:'bar',data:porUnidad.map(u=>u.galones),itemStyle:{color:COLORS.accent}},
-        {name:'Horas motor',type:'bar',yAxisIndex:1,data:porUnidad.map(u=>u.horasMotor),itemStyle:{color:COLORS.ok}}
+        {name:'Galones',type:'bar',data:porUnidad.map(u=>r2(u.galones)),itemStyle:{color:COLORS.accent}},
+        {name:'Horas motor',type:'bar',yAxisIndex:1,data:porUnidad.map(u=>r2(u.horasMotor)),itemStyle:{color:COLORS.ok}}
       ]},true);
   }
 
@@ -1275,12 +1393,12 @@ function renderConsumoMotor(){
   const {cambioPorc:galCambio} = compararMesAnterior(f=>num(f.combustible_total));
   const {cambioPorc:horCambio} = compararMesAnterior(f=>num(f.horas_motor));
 
-  document.getElementById("kpiConsumo").innerHTML = `<div class="kpi-row"><span class="k-lbl">Total galones del período</span><span class="k-val mono ok">${totalGalones.toFixed(1)} gal</span></div>
+  document.getElementById("kpiConsumo").innerHTML = `<div class="kpi-row"><span class="k-lbl">Total galones del período</span><span class="k-val mono ok">${totalGalones.toFixed(2)} gal</span></div>
     <div class="kpi-row"><span class="k-lbl">Promedio diario</span><span class="k-val mono">${(totalGalones/Math.max(dias.length,1)).toFixed(2)} gal/día</span></div>
-    <div class="kpi-row"><span class="k-lbl">Vs. mes anterior</span>${chipComparativo(galCambio)}</div>`;
-  document.getElementById("kpiHorasMotor").innerHTML = `<div class="kpi-row"><span class="k-lbl">Total horas motor del período</span><span class="k-val mono ok">${totalHoras.toFixed(1)} h</span></div>
+    <div class="kpi-row"><span class="k-lbl">Galones vs. mes anterior</span>${chipComparativo(galCambio)}</div>`;
+  document.getElementById("kpiHorasMotor").innerHTML = `<div class="kpi-row"><span class="k-lbl">Total horas motor del período</span><span class="k-val mono ok">${totalHoras.toFixed(2)} h</span></div>
     <div class="kpi-row"><span class="k-lbl">Rendimiento (gal/hora)</span><span class="k-val mono">${(totalHoras>0?totalGalones/totalHoras:0).toFixed(2)}</span></div>
-    <div class="kpi-row"><span class="k-lbl">Vs. mes anterior</span>${chipComparativo(horCambio)}</div>`;
+    <div class="kpi-row"><span class="k-lbl">Horas motor vs. mes anterior</span>${chipComparativo(horCambio)}</div>`;
 }
 
 /* ================= ENCENDIDOS ================= */
@@ -1303,103 +1421,190 @@ function renderEncendidos(){
     const diasPeriodo=filtrarPorPeriodo(getDiarioSerieCompleta());
     const fechas=diasPeriodo.map(f=>f.fecha.split("/")[0]);
     chart.setOption({grid:{left:45,right:50,top:30,bottom:34},
-      tooltip:{trigger:'axis'}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
-      dataZoom:[{type:'inside'},{type:'slider',height:12,bottom:4}],
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'#',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Encendidos',type:'bar',data:diasPeriodo.map(f=>f.encendidos),itemStyle:{color:COLORS.warn}},
-        {name:'Horas motor',type:'line',yAxisIndex:1,data:diasPeriodo.map(f=>f.horasMotor),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2}}
+        {name:'Encendidos',type:'bar',data:diasPeriodo.map(f=>r2(f.encendidos)),itemStyle:{color:COLORS.warn}},
+        {name:'Horas motor',type:'line',yAxisIndex:1,data:diasPeriodo.map(f=>r2(f.horasMotor)),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2}}
       ]},true);
   } else if(encendidosVista==="mensual"){
     const porMes=agruparPorMes(getDiarioSerieCompleta(),["encendidos","horasMotor"]);
     chart.setOption({grid:{left:45,right:50,top:30,bottom:50},
-      tooltip:{trigger:'axis'}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:[{type:'value',name:'#',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Encendidos',type:'bar',data:porMes.map(m=>m.encendidos),itemStyle:{color:COLORS.warn}},
-        {name:'Horas motor',type:'line',yAxisIndex:1,data:porMes.map(m=>m.horasMotor),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2}}
+        {name:'Encendidos',type:'bar',data:porMes.map(m=>r2(m.encendidos)),itemStyle:{color:COLORS.warn}},
+        {name:'Horas motor',type:'line',yAxisIndex:1,data:porMes.map(m=>r2(m.horasMotor)),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2}}
       ]},true);
   } else {
     const porUnidad=porUnidadTotales(["encendidos","horasMotor"]);
     chart.setOption({grid:{left:60,right:50,top:30,bottom:34},
-      tooltip:{trigger:'axis'}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      dataZoom:dataZoomConfig(porUnidad.length),
       xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'#',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Encendidos',type:'bar',data:porUnidad.map(u=>u.encendidos),itemStyle:{color:COLORS.warn}},
-        {name:'Horas motor',type:'bar',yAxisIndex:1,data:porUnidad.map(u=>u.horasMotor),itemStyle:{color:COLORS.ok}}
+        {name:'Encendidos',type:'bar',data:porUnidad.map(u=>r2(u.encendidos)),itemStyle:{color:COLORS.warn}},
+        {name:'Horas motor',type:'bar',yAxisIndex:1,data:porUnidad.map(u=>r2(u.horasMotor)),itemStyle:{color:COLORS.ok}}
       ]},true);
   }
 
   const dias=filtrarPorPeriodo(getDiarioSerieCompleta());
   const totalEnc=dias.reduce((a,f)=>a+f.encendidos,0), totalHor=dias.reduce((a,f)=>a+f.horasMotor,0);
-  const {cambioPorc:encCambio}=compararMesAnterior(f=>num(f.encendidos));
+  const {actual:encActual, anterior:encAnterior, cambioPorc:encCambio}=compararMesAnterior(f=>num(f.encendidos));
+  const porUnidadEnc=porUnidadTotales(["encendidos"]);
+  const promedioPorUnidad = porUnidadEnc.length ? porUnidadEnc.reduce((a,u)=>a+u.encendidos,0)/porUnidadEnc.length : 0;
+  const diaPico = dias.length ? dias.reduce((max,f)=> f.encendidos>max.encendidos?f:max, dias[0]) : null;
+
   document.getElementById("kpiEncendidos").innerHTML=`
-    <div class="kpi-row"><span class="k-lbl">Total encendidos del período</span><span class="k-val mono ok">${totalEnc}</span></div>
-    <div class="kpi-row"><span class="k-lbl">Promedio diario</span><span class="k-val mono">${(totalEnc/Math.max(dias.length,1)).toFixed(1)}</span></div>
+    <div class="kpi-row"><span class="k-lbl">Total encendidos del período</span><span class="k-val mono ok">${totalEnc.toFixed(2)}</span></div>
+    <div class="kpi-row"><span class="k-lbl">Promedio diario</span><span class="k-val mono">${(totalEnc/Math.max(dias.length,1)).toFixed(2)}</span></div>
     <div class="kpi-row"><span class="k-lbl">Encendidos por hora motor</span><span class="k-val mono">${(totalHor>0?totalEnc/totalHor:0).toFixed(2)}</span></div>`;
   document.getElementById("kpiEncendidosComp").innerHTML=`
-    <div class="kpi-row"><span class="k-lbl">Vs. mes anterior</span>${chipComparativo(encCambio)}</div>`;
+    <div class="kpi-row"><span class="k-lbl">Encendidos vs. mes anterior</span>${chipComparativo(encCambio)}</div>
+    <div class="kpi-row"><span class="k-lbl">Este mes / mes anterior (total)</span><span class="k-val mono">${encActual.toFixed(2)} / ${encAnterior.toFixed(2)}</span></div>
+    <div class="kpi-row"><span class="k-lbl">Promedio por unidad</span><span class="k-val mono">${promedioPorUnidad.toFixed(2)}</span></div>
+    <div class="kpi-row"><span class="k-lbl">Día con más encendidos</span><span class="k-val mono">${diaPico?diaPico.fecha+' ('+diaPico.encendidos.toFixed(2)+')':'—'}</span></div>`;
 }
 
 /* ================= OPERACIÓN: RENDIMIENTOS / USO DE FLOTA ================= */
 function renderOperacion(){
-  if(subvistaActual==="uso_flota"){ renderUsoFlota(); return; }
+  const rmToggle=document.getElementById("rendimientoMetricaToggle");
+  const rvToggle=document.getElementById("rendimientoViewToggle");
+  const barrasRow=document.getElementById("usoFlotaBarrasRow");
+  if(subvistaActual==="uso_flota"){
+    rmToggle.style.display="none"; rvToggle.style.display="none"; barrasRow.style.display="block";
+    renderUsoFlota(); return;
+  }
+  rmToggle.style.display="flex"; rvToggle.style.display="flex"; barrasRow.style.display="none";
   renderRendimientos();
 }
 
-// RENDIMIENTOS: gal/hora por día (calculado por placa+fecha desde "diario"; o suma de flota si "TODAS")
+// RENDIMIENTOS: gal/hora o km/gal por día — con vista Diario/Mensual/Por Unidad
+let rendimientoVista="diario";
+let rendimientoMetrica="galhora"; // galhora | kmgal
+function calcularRendimiento(galones, horasMotor, km){
+  if(rendimientoMetrica==="kmgal") return galones>0 ? km/galones : 0;
+  return horasMotor>0 ? galones/horasMotor : 0;
+}
+function etiquetaRendimiento(){ return rendimientoMetrica==="kmgal" ? "km/gal" : "gal/h"; }
+
 function renderRendimientos(){
-  const dias = filtrarPorPeriodo(getEcmDiasSerie());
-  const fechas = dias.map(f=>f.fecha.split("/")[0]);
-  const rendimientoDia = dias.map(f=> f.horasMotor>0 ? f.galones/f.horasMotor : 0);
+  const vToggle=document.getElementById("rendimientoViewToggle");
+  if(vToggle && !vToggle.dataset.wired){
+    vToggle.dataset.wired="1";
+    vToggle.querySelectorAll(".v-opt").forEach(o=>o.addEventListener("click",()=>{
+      rendimientoVista=o.dataset.v;
+      vToggle.querySelectorAll(".v-opt").forEach(x=>x.classList.toggle("active",x===o));
+      renderRendimientos();
+    }));
+  }
+  const mToggle=document.getElementById("rendimientoMetricaToggle");
+  if(mToggle && !mToggle.dataset.wired){
+    mToggle.dataset.wired="1";
+    mToggle.querySelectorAll(".v-opt").forEach(o=>o.addEventListener("click",()=>{
+      rendimientoMetrica=o.dataset.v;
+      mToggle.querySelectorAll(".v-opt").forEach(x=>x.classList.toggle("active",x===o));
+      renderRendimientos();
+    }));
+  }
+  document.getElementById("tituloTrendOperacion").textContent = `Rendimiento diario (${etiquetaRendimiento()})`;
+  document.getElementById("tituloKpiOperacion").textContent = "Resumen del período";
 
   const trend=echarts.getInstanceByDom(document.getElementById("trendOperacion"))||echarts.init(document.getElementById("trendOperacion"));
   trend.clear();
-  trend.setOption({grid:{left:50,right:20,top:16,bottom:34},
-    tooltip:{trigger:'axis',formatter:p=>`${p[0].axisValue}: ${Number(p[0].value).toFixed(2)} gal/h`},
-    dataZoom:[{type:'inside'},{type:'slider',height:12,bottom:4}],
-    xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
-    yAxis:{type:'value',name:'gal/h',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
-    series:[{type:'line',data:rendimientoDia,smooth:true,itemStyle:{color:COLORS.accent},areaStyle:{color:COLORS.accent+'22'},symbol:'circle',symbolSize:5,lineStyle:{width:2}}]},true);
 
+  if(rendimientoVista==="diario"){
+    const dias = filtrarPorPeriodo(getEcmDiasSerie());
+    const fechas = dias.map(f=>f.fecha.split("/")[0]);
+    const rendimientoDia = dias.map(f=> r2(calcularRendimiento(f.galones, f.horasMotor, f.km)));
+    trend.setOption({grid:{left:50,right:20,top:16,bottom:34},
+      tooltip:{trigger:'axis',valueFormatter:v=>`${Number(v).toFixed(2)} ${etiquetaRendimiento()}`},
+      dataZoom:dataZoomConfig(fechas.length),
+      xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
+      yAxis:{type:'value',name:etiquetaRendimiento(),axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+      series:[{type:'line',data:rendimientoDia,smooth:true,itemStyle:{color:COLORS.accent},areaStyle:{color:COLORS.accent+'22'},symbol:'circle',symbolSize:5,lineStyle:{width:2}}]},true);
+  } else if(rendimientoVista==="mensual"){
+    const porMes=agruparPorMes(getDiarioSerieCompleta(),["galones","horasMotor","km"]);
+    const valores=porMes.map(m=>r2(calcularRendimiento(m.galones, m.horasMotor, m.km)));
+    trend.setOption({grid:{left:50,right:20,top:16,bottom:50},
+      tooltip:{trigger:'axis',valueFormatter:v=>`${Number(v).toFixed(2)} ${etiquetaRendimiento()}`},
+      xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
+      yAxis:{type:'value',name:etiquetaRendimiento(),axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+      series:[{type:'line',data:valores,smooth:true,itemStyle:{color:COLORS.accent},areaStyle:{color:COLORS.accent+'22'},symbol:'circle',symbolSize:5,lineStyle:{width:2}}]},true);
+  } else {
+    const porUnidad=porUnidadTotales(["galones","horasMotor","km"]).map(u=>({placa:u.placa, valor:r2(calcularRendimiento(u.galones,u.horasMotor,u.km))}));
+    trend.setOption({grid:{left:50,right:20,top:16,bottom:34},
+      tooltip:{trigger:'axis',valueFormatter:v=>`${Number(v).toFixed(2)} ${etiquetaRendimiento()}`},
+      dataZoom:dataZoomConfig(porUnidad.length),
+      xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
+      yAxis:{type:'value',name:etiquetaRendimiento(),axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+      series:[{type:'bar',data:porUnidad.map(u=>u.valor),itemStyle:{color:COLORS.accent}}]},true);
+  }
+
+  const dias = filtrarPorPeriodo(getEcmDiasSerie());
   const totalGalones=dias.reduce((a,f)=>a+f.galones,0), totalHoras=dias.reduce((a,f)=>a+f.horasMotor,0), totalKm=dias.reduce((a,f)=>a+f.km,0);
-  document.getElementById("kpiOperacion").innerHTML=`<div class="kpi-row"><span class="k-lbl">Horas motor (período)</span><span class="k-val mono ok">${totalHoras.toFixed(1)} h</span></div><div class="kpi-row"><span class="k-lbl">Distancia (período)</span><span class="k-val mono ok">${totalKm.toFixed(1)} km</span></div>`;
-  document.getElementById("kpiEficiencia").innerHTML=`<div class="kpi-row"><span class="k-lbl">Rendimiento (gal/hora)</span><span class="k-val mono">${(totalHoras>0?totalGalones/totalHoras:0).toFixed(2)}</span></div><div class="kpi-row"><span class="k-lbl">Km / galón</span><span class="k-val mono">${(totalGalones>0?totalKm/totalGalones:0).toFixed(1)}</span></div>`;
+  document.getElementById("kpiOperacion").innerHTML=`<div class="kpi-row"><span class="k-lbl">Horas motor (período)</span><span class="k-val mono ok">${totalHoras.toFixed(2)} h</span></div><div class="kpi-row"><span class="k-lbl">Distancia (período)</span><span class="k-val mono ok">${totalKm.toFixed(2)} km</span></div>`;
+  document.getElementById("kpiEficiencia").innerHTML=`<div class="kpi-row"><span class="k-lbl">Rendimiento (gal/hora)</span><span class="k-val mono">${(totalHoras>0?totalGalones/totalHoras:0).toFixed(2)}</span></div><div class="kpi-row"><span class="k-lbl">Km / galón</span><span class="k-val mono">${(totalGalones>0?totalKm/totalGalones:0).toFixed(2)}</span></div>`;
 
-  // Comparativo mes a mes del rendimiento (ignora día, solo respeta año/mes elegido)
+  // Comparativo mes a mes (siempre en la métrica activa, ignora día, solo respeta año/mes elegido)
   const galMes=compararMesAnterior(f=>num(f.combustible_total));
   const horMes=compararMesAnterior(f=>num(f.horas_motor));
-  const rendActual = horMes.actual>0 ? galMes.actual/horMes.actual : 0;
-  const rendAnterior = horMes.anterior>0 ? galMes.anterior/horMes.anterior : 0;
+  const kmMes=compararMesAnterior(f=>num(f.km));
+  const rendActual = calcularRendimiento(galMes.actual, horMes.actual, kmMes.actual);
+  const rendAnterior = calcularRendimiento(galMes.anterior, horMes.anterior, kmMes.anterior);
   const rendCambio = rendAnterior===0 ? (rendActual>0?100:0) : ((rendActual-rendAnterior)/rendAnterior*100);
 
-  // Por unidad + Top 5 (mejor = menos gal/hora, más eficiente)
-  const porUnidadTot=porUnidadTotales(["galones","horasMotor"]).map(u=>({placa:u.placa, rendimiento: u.horasMotor>0? u.galones/u.horasMotor : 0})).filter(u=>u.rendimiento>0);
-  const top5Mejor=[...porUnidadTot].sort((a,b)=>a.rendimiento-b.rendimiento).slice(0,5);
-  const top5Peor=[...porUnidadTot].sort((a,b)=>b.rendimiento-a.rendimiento).slice(0,5);
+  // Por unidad + Top 5. En gal/h, "mejor" = menos gal/h (más eficiente); en km/gal, "mejor" = más km/gal.
+  const porUnidadTot=porUnidadTotales(["galones","horasMotor","km"]).map(u=>({placa:u.placa, rendimiento: calcularRendimiento(u.galones,u.horasMotor,u.km)})).filter(u=>u.rendimiento>0);
+  const mejorPrimero = rendimientoMetrica==="kmgal";
+  const top5Mejor=[...porUnidadTot].sort((a,b)=> mejorPrimero ? b.rendimiento-a.rendimiento : a.rendimiento-b.rendimiento).slice(0,5);
+  const top5Peor=[...porUnidadTot].sort((a,b)=> mejorPrimero ? a.rendimiento-b.rendimiento : b.rendimiento-a.rendimiento).slice(0,5);
+  const promedioFlota = porUnidadTot.length ? porUnidadTot.reduce((a,u)=>a+u.rendimiento,0)/porUnidadTot.length : 0;
 
   document.getElementById("panelExtra").innerHTML=`
-    <div class="panel-title between"><span>Comparativa mes a mes y por unidad</span></div>
-    <div class="kpi-row" style="margin-bottom:14px;"><span class="k-lbl">Rendimiento (${rendActual.toFixed(2)} gal/h) vs. mes anterior (${rendAnterior.toFixed(2)} gal/h)</span>${chipComparativo(rendCambio)}</div>
+    <div class="panel-title between"><span>Comparativa mes a mes y por unidad (${etiquetaRendimiento()})</span></div>
+    <div class="kpi-row" style="margin-bottom:14px;"><span class="k-lbl">Este mes: ${rendActual.toFixed(2)} ${etiquetaRendimiento()} · Mes anterior: ${rendAnterior.toFixed(2)} ${etiquetaRendimiento()} · Promedio de flota: ${promedioFlota.toFixed(2)} ${etiquetaRendimiento()}</span>${chipComparativo(rendCambio)}</div>
     <div class="row2" style="grid-template-columns:1fr 1fr;">
       <div>
-        <div style="font-size:11px;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">Top 5 mejor rendimiento (menos gal/h)</div>
-        ${top5Mejor.length?top5Mejor.map(u=>`<div class="top-falla-row"><span>${u.placa}</span><span class="mono ok">${u.rendimiento.toFixed(2)} gal/h</span></div>`).join(""):'<span style="color:var(--text-dim);font-size:12px;">Sin datos suficientes</span>'}
+        <div style="font-size:11px;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">Top 5 mejor rendimiento</div>
+        ${top5Mejor.length?top5Mejor.map(u=>`<div class="top-falla-row"><span>${u.placa}</span><span class="mono ok">${u.rendimiento.toFixed(2)} ${etiquetaRendimiento()}</span></div>`).join(""):'<span style="color:var(--text-dim);font-size:12px;">Sin datos suficientes</span>'}
       </div>
       <div>
-        <div style="font-size:11px;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">Top 5 peor rendimiento (más gal/h)</div>
-        ${top5Peor.length?top5Peor.map(u=>`<div class="top-falla-row"><span>${u.placa}</span><span class="mono warn">${u.rendimiento.toFixed(2)} gal/h</span></div>`).join(""):'<span style="color:var(--text-dim);font-size:12px;">Sin datos suficientes</span>'}
+        <div style="font-size:11px;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">Top 5 peor rendimiento</div>
+        ${top5Peor.length?top5Peor.map(u=>`<div class="top-falla-row"><span>${u.placa}</span><span class="mono warn">${u.rendimiento.toFixed(2)} ${etiquetaRendimiento()}</span></div>`).join(""):'<span style="color:var(--text-dim);font-size:12px;">Sin datos suficientes</span>'}
       </div>
     </div>`;
 }
 
-// USO DE FLOTA: Conducción / Ralentí / Detenido — con "TODAS" se suman horas base entre unidades
+// Serie diaria SIN filtrar por período, con horasConduccion/horasRalenti/tiempoMuerto
+// (para la vista mensual de Uso de Flota, que necesita ver varios meses a la vez)
+function getUsoFlotaSerieCompleta(){
+  if(unidadActual==="TODAS"){
+    const porFecha={};
+    Object.keys(DATA).forEach(p=>{
+      (DATA[p].diario||[]).forEach(f=>{
+        if(!porFecha[f.fecha]) porFecha[f.fecha]={fecha:f.fecha, horasConduccion:0, horasRalenti:0, tiempoMuerto:0};
+        porFecha[f.fecha].horasConduccion+=num(f.horas_conduccion);
+        porFecha[f.fecha].horasRalenti+=num(f.horas_ralenti);
+        porFecha[f.fecha].tiempoMuerto+=Math.max(24-num(f.horas_motor),0);
+      });
+    });
+    return Object.values(porFecha);
+  }
+  return ((DATA[unidadActual]&&DATA[unidadActual].diario)||[]).map(f=>({
+    fecha:f.fecha, horasConduccion:num(f.horas_conduccion), horasRalenti:num(f.horas_ralenti), tiempoMuerto:Math.max(24-num(f.horas_motor),0)
+  }));
+}
+
+// USO DE FLOTA: torta grande + barras apiladas (diario/mensual) + comparativo mes a mes por categoría
+let usoFlotaVista="diario";
 function renderUsoFlota(){
   const dias = filtrarPorPeriodo(getEcmDiasSerie());
   const totalConduccion = dias.reduce((a,f)=>a+f.horasConduccion,0);
@@ -1409,10 +1614,10 @@ function renderUsoFlota(){
 
   const trend=echarts.getInstanceByDom(document.getElementById("trendOperacion"))||echarts.init(document.getElementById("trendOperacion"));
   trend.clear(); // clave: este contenedor alterna entre línea (Rendimientos) y torta (Uso de Flota); sin clear() quedan artefactos del gráfico anterior
-  trend.setOption({tooltip:{trigger:'item',formatter:p=>`${p.name}: ${p.value.toFixed(1)} h (${(p.value/totalHorasBase*100).toFixed(0)}%)`},
-    legend:{orient:'vertical', right:16, top:'middle', textStyle:{color:'#A8A8AC',fontSize:11}},
-    series:[{type:'pie',radius:['46%','78%'],center:['36%','50%'],
-      label:{color:'#E8E8EA',fontSize:12,formatter:p=>`${(p.percent).toFixed(0)}%`},
+  trend.setOption({tooltip:{trigger:'item',formatter:p=>`${p.name}: ${p.value.toFixed(2)} h (${(p.value/totalHorasBase*100).toFixed(2)}%)`},
+    legend:{orient:'vertical', right:16, top:'middle', textStyle:{color:'#A8A8AC',fontSize:12}},
+    series:[{type:'pie',radius:['50%','85%'],center:['33%','50%'],
+      label:{color:'#E8E8EA',fontSize:13,formatter:p=>`${(p.percent).toFixed(2)}%`},
       labelLine:{length:8},
       data:[
         {value:totalConduccion,name:'Conducción',itemStyle:{color:COLORS.ok}},
@@ -1421,21 +1626,67 @@ function renderUsoFlota(){
       ]}]},true);
 
   document.getElementById("kpiOperacion").innerHTML=`
-    <div class="kpi-row"><span class="k-lbl">Conducción</span><span class="k-val mono ok">${totalConduccion.toFixed(1)} h (${(totalConduccion/totalHorasBase*100).toFixed(0)}%)</span></div>
-    <div class="kpi-row"><span class="k-lbl">Ralentí</span><span class="k-val mono warn">${totalRalenti.toFixed(1)} h (${(totalRalenti/totalHorasBase*100).toFixed(0)}%)</span></div>
-    <div class="kpi-row"><span class="k-lbl">Detenido</span><span class="k-val mono">${totalDetenido.toFixed(1)} h (${(totalDetenido/totalHorasBase*100).toFixed(0)}%)</span></div>`;
+    <div class="kpi-row"><span class="k-lbl">Conducción</span><span class="k-val mono ok">${totalConduccion.toFixed(2)} h (${(totalConduccion/totalHorasBase*100).toFixed(2)}%)</span></div>
+    <div class="kpi-row"><span class="k-lbl">Ralentí</span><span class="k-val mono warn">${totalRalenti.toFixed(2)} h (${(totalRalenti/totalHorasBase*100).toFixed(2)}%)</span></div>
+    <div class="kpi-row"><span class="k-lbl">Detenido</span><span class="k-val mono">${totalDetenido.toFixed(2)} h (${(totalDetenido/totalHorasBase*100).toFixed(2)}%)</span></div>`;
   document.getElementById("kpiEficiencia").innerHTML=`<div class="kpi-row"><span class="k-lbl">Días evaluados</span><span class="k-val mono">${dias.length}</span></div>
-    <div class="kpi-row"><span class="k-lbl">% tiempo productivo (conducción)</span><span class="k-val mono ${totalConduccion/totalHorasBase<0.3?'warn':'ok'}">${(totalConduccion/totalHorasBase*100).toFixed(0)}%</span></div>`;
+    <div class="kpi-row"><span class="k-lbl">% tiempo productivo (conducción)</span><span class="k-val mono ${totalConduccion/totalHorasBase<0.3?'warn':'ok'}">${(totalConduccion/totalHorasBase*100).toFixed(2)}%</span></div>`;
 
+  // Segundo gráfico: barras apiladas por día o mes
+  const bToggle=document.getElementById("usoFlotaViewToggle");
+  if(bToggle && !bToggle.dataset.wired){
+    bToggle.dataset.wired="1";
+    bToggle.querySelectorAll(".v-opt").forEach(o=>o.addEventListener("click",()=>{
+      usoFlotaVista=o.dataset.v;
+      bToggle.querySelectorAll(".v-opt").forEach(x=>x.classList.toggle("active",x===o));
+      renderUsoFlota();
+    }));
+  }
+  const barChart=echarts.getInstanceByDom(document.getElementById("trendUsoFlotaBarras"))||echarts.init(document.getElementById("trendUsoFlotaBarras"));
+  barChart.clear();
+  if(usoFlotaVista==="diario"){
+    const fechas=dias.map(f=>f.fecha.split("/")[0]);
+    barChart.setOption({grid:{left:45,right:20,top:30,bottom:34},
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      dataZoom:dataZoomConfig(fechas.length),
+      xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
+      yAxis:{type:'value',name:'h',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+      series:[
+        {name:'Conducción',type:'bar',stack:'h',data:dias.map(f=>r2(f.horasConduccion)),itemStyle:{color:COLORS.ok}},
+        {name:'Ralentí',type:'bar',stack:'h',data:dias.map(f=>r2(f.horasRalenti)),itemStyle:{color:COLORS.warn}},
+        {name:'Detenido',type:'bar',stack:'h',data:dias.map(f=>r2(f.tiempoMuerto)),itemStyle:{color:'#4A4B4F'}}
+      ]},true);
+  } else {
+    const porMes=agruparPorMes(getUsoFlotaSerieCompleta(),["horasConduccion","horasRalenti","tiempoMuerto"]);
+    barChart.setOption({grid:{left:45,right:20,top:30,bottom:50},
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
+      yAxis:{type:'value',name:'h',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+      series:[
+        {name:'Conducción',type:'bar',stack:'h',data:porMes.map(m=>r2(m.horasConduccion)),itemStyle:{color:COLORS.ok}},
+        {name:'Ralentí',type:'bar',stack:'h',data:porMes.map(m=>r2(m.horasRalenti)),itemStyle:{color:COLORS.warn}},
+        {name:'Detenido',type:'bar',stack:'h',data:porMes.map(m=>r2(m.tiempoMuerto)),itemStyle:{color:'#4A4B4F'}}
+      ]},true);
+  }
+
+  // Comparativo mes a mes por categoría + ranking de disponibilidad por unidad
+  const condMes=compararMesAnterior(f=>num(f.horas_conduccion));
+  const ralMes=compararMesAnterior(f=>num(f.horas_ralenti));
   const porUnidad=Object.keys(DATA).map(p=>{
     const diasU=filtrarPorPeriodo((DATA[p].diario||[]).map(f=>({fecha:f.fecha, horasRalenti:num(f.horas_ralenti), horasConduccion:num(f.horas_conduccion)})));
     const hc=diasU.reduce((a,f)=>a+f.horasConduccion,0), hr=diasU.reduce((a,f)=>a+f.horasRalenti,0);
     const base=hc+hr+Math.max(24*diasU.length-hc-hr,0);
     return {placa:p, pct: base>0? hc/base*100 : 0};
-  });
+  }).sort((a,b)=>b.pct-a.pct);
+
   document.getElementById("panelExtra").innerHTML=`
-    <div class="panel-title">% de conducción por unidad (del período)</div>
-    ${porUnidad.map(u=>`<div class="top-falla-row"><span>${u.placa}</span><span class="mono ${u.pct<20?'warn':'ok'}">${u.pct.toFixed(0)}%</span></div>`).join("")}`;
+    <div class="panel-title between"><span>Comparativa mes a mes y disponibilidad por unidad</span></div>
+    <div class="row2" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
+      <div class="kpi-row"><span class="k-lbl">Horas de conducción vs. mes anterior</span>${chipComparativo(condMes.cambioPorc)}</div>
+      <div class="kpi-row"><span class="k-lbl">Horas de ralentí vs. mes anterior</span>${chipComparativo(ralMes.cambioPorc)}</div>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">Disponibilidad (% conducción) por unidad — mayor a menor</div>
+    ${porUnidad.map(u=>`<div class="top-falla-row"><span>${u.placa}</span><span class="mono ${u.pct<20?'warn':'ok'}">${u.pct.toFixed(2)}%</span></div>`).join("")}`;
 }
 
 /* ================= SEGURIDAD: FALLAS POR SEVERIDAD (SAE J1939 FMI) ================= */
@@ -1487,6 +1738,10 @@ function detectarRecurrenciaCritica(diasVentana=7, umbral=3){
   return Object.values(grupos).filter(g=>g.cantidad>=umbral).sort((a,b)=>b.cantidad-a.cantidad);
 }
 
+let sevFiltroTopActual="todas";
+let sevFiltroChartActual="todas";
+let fallasVista="diario";
+
 function renderSeguridad(){
   // Orden cronológico (no por cantidad) — así se puede seguir la secuencia real de eventos
   const fallasPeriodo=filtrarPorPeriodo(getFallasSerie()).sort((a,b)=>parseFechaDDMMYYYY(a.fecha)-parseFechaDDMMYYYY(b.fecha));
@@ -1497,17 +1752,28 @@ function renderSeguridad(){
     <div class="sev-card" style="--sev-color:var(--warn);"><div class="sev-lbl">Advertencia</div><div class="sev-val">${resumen.advertencia}</div></div>
     <div class="sev-card" style="--sev-color:var(--text-secondary);"><div class="sev-lbl">Informativa</div><div class="sev-val">${resumen.informativa}</div></div>`;
 
-  const topFallas=calcularTopFallas(fallasPeriodo);
+  // --- Fallas más frecuentes (con subfiltro de severidad) ---
+  const topToggle=document.getElementById("sevFiltroTop");
+  if(topToggle && !topToggle.dataset.wired){
+    topToggle.dataset.wired="1";
+    topToggle.querySelectorAll(".v-opt").forEach(o=>o.addEventListener("click",()=>{
+      sevFiltroTopActual=o.dataset.v;
+      topToggle.querySelectorAll(".v-opt").forEach(x=>x.classList.toggle("active",x===o));
+      renderSeguridad();
+    }));
+  }
+  const fallasParaTop = sevFiltroTopActual==="todas" ? fallasPeriodo : fallasPeriodo.filter(f=>clasificarSeveridadFMI(f.codigo_falla)===sevFiltroTopActual);
+  const topFallas=calcularTopFallas(fallasParaTop);
   document.getElementById("topFallasList").innerHTML = topFallas.length ? topFallas.map(f=>{
     const color=resolveColor(SEVERIDAD_COLOR[f.severidad]);
     return `<div class="top-falla-row">
-      <span>${f.diagnostico} <span class="mono" style="color:var(--text-dim);">(${f.spn}-${f.fmi})</span></span>
+      <span>${f.diagnostico} <span class="mono" style="color:var(--text-dim);">(SPN: ${f.spn} · FMI: ${f.fmi})</span></span>
       <span style="display:flex;align-items:center;gap:8px;">
         <span class="top-falla-badge" style="background:${color}22;color:${color};">${SEVERIDAD_LABEL[f.severidad]}</span>
         <span class="mono">x${f.cantidad}</span>
       </span>
     </div>`;
-  }).join("") : '<span style="color:var(--text-dim);font-size:12px;">Sin fallas en el período</span>';
+  }).join("") : '<span style="color:var(--text-dim);font-size:12px;">Sin fallas en el período para este filtro</span>';
 
   const tendencia=calcularTendenciaCriticas();
   document.getElementById("kpiTendenciaFallas").innerHTML=`
@@ -1523,21 +1789,244 @@ function renderSeguridad(){
     banner.innerHTML=`<div class="alert-banner ok">✓ <span>Sin fallas críticas recurrentes en el período reciente</span></div>`;
   }
 
-  document.getElementById("tablaFallas").innerHTML=`<tr><th>Fecha</th><th>Diagnóstico</th><th>Controlador</th><th>Código</th><th style="text-align:right;">Cantidad</th></tr>`+
+  // --- Gráfico "Cantidad de fallas" (severidad + vista diario/mensual/unidad) ---
+  const chartSevToggle=document.getElementById("sevFiltroChart");
+  if(chartSevToggle && !chartSevToggle.dataset.wired){
+    chartSevToggle.dataset.wired="1";
+    chartSevToggle.querySelectorAll(".v-opt").forEach(o=>o.addEventListener("click",()=>{
+      sevFiltroChartActual=o.dataset.v;
+      chartSevToggle.querySelectorAll(".v-opt").forEach(x=>x.classList.toggle("active",x===o));
+      renderSeguridad();
+    }));
+  }
+  const fallasViewToggle=document.getElementById("fallasViewToggle");
+  if(fallasViewToggle && !fallasViewToggle.dataset.wired){
+    fallasViewToggle.dataset.wired="1";
+    fallasViewToggle.querySelectorAll(".v-opt").forEach(o=>o.addEventListener("click",()=>{
+      fallasVista=o.dataset.v;
+      fallasViewToggle.querySelectorAll(".v-opt").forEach(x=>x.classList.toggle("active",x===o));
+      renderSeguridad();
+    }));
+  }
+
+  const todasFallasFlota = Object.values(DATA).flatMap(u=>u.fallas||[]);
+  const fallasFiltroSev = sevFiltroChartActual==="todas" ? todasFallasFlota : todasFallasFlota.filter(f=>clasificarSeveridadFMI(f.codigo_falla)===sevFiltroChartActual);
+
+  const chart=echarts.getInstanceByDom(document.getElementById("trendFallas"))||echarts.init(document.getElementById("trendFallas"));
+  chart.clear();
+  if(fallasVista==="diario"){
+    const fallasFiltradasPeriodo = filtrarPorPeriodo(sevFiltroChartActual==="todas" ? fallasPeriodo : fallasPeriodo.filter(f=>clasificarSeveridadFMI(f.codigo_falla)===sevFiltroChartActual));
+    const porDia={};
+    fallasFiltradasPeriodo.forEach(f=>{ porDia[f.fecha]=(porDia[f.fecha]||0)+(f.cantidad||1); });
+    const fechasOrdenadas=Object.keys(porDia).sort((a,b)=>parseFechaDDMMYYYY(a)-parseFechaDDMMYYYY(b));
+    chart.setOption({grid:{left:40,right:20,top:16,bottom:34},
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)},
+      dataZoom:dataZoomConfig(fechasOrdenadas.length),
+      xAxis:{type:'category',data:fechasOrdenadas.map(f=>f.split("/")[0]),axisLabel:{color:'#A8A8AC',fontSize:10}},
+      yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+      series:[{type:'bar',data:fechasOrdenadas.map(f=>porDia[f]),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])}}]},true);
+  } else if(fallasVista==="mensual"){
+    const porMes={};
+    fallasFiltroSev.forEach(f=>{
+      const d=parseFechaDDMMYYYY(f.fecha); const clave=d.getFullYear()+"-"+d.getMonth();
+      if(!porMes[clave]) porMes[clave]={label:MESES[d.getMonth()].slice(0,3)+" "+d.getFullYear(), cantidad:0, orden:d.getFullYear()*12+d.getMonth()};
+      porMes[clave].cantidad += (f.cantidad||1);
+    });
+    const meses=Object.values(porMes).sort((a,b)=>a.orden-b.orden);
+    chart.setOption({grid:{left:40,right:20,top:16,bottom:50},
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)},
+      xAxis:{type:'category',data:meses.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
+      yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+      series:[{type:'bar',data:meses.map(m=>m.cantidad),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])}}]},true);
+  } else {
+    const porUnidad=Object.keys(DATA).map(p=>{
+      const fallasU = sevFiltroChartActual==="todas" ? (DATA[p].fallas||[]) : (DATA[p].fallas||[]).filter(f=>clasificarSeveridadFMI(f.codigo_falla)===sevFiltroChartActual);
+      return {placa:p, cantidad: fallasU.reduce((a,f)=>a+(f.cantidad||1),0)};
+    });
+    chart.setOption({grid:{left:40,right:20,top:16,bottom:34},
+      tooltip:{trigger:'axis',valueFormatter:v=>Number(v).toFixed(2)},
+      dataZoom:dataZoomConfig(porUnidad.length),
+      xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
+      yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+      series:[{type:'bar',data:porUnidad.map(u=>u.cantidad),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])}}]},true);
+  }
+
+  document.getElementById("tablaFallas").innerHTML=`<tr><th>Fecha</th><th>Diagnóstico</th><th>Controlador</th><th>SPN</th><th>FMI</th><th style="text-align:right;">Cantidad</th></tr>`+
     fallasPeriodo.map(f=>{
       const color=resolveColor(SEVERIDAD_COLOR[clasificarSeveridadFMI(f.codigo_falla)]);
-      return `<tr><td class="mono">${f.fecha}</td><td>${f.diagnostico}</td><td>${f.controlador}</td><td class="mono" style="color:${color};">${f.codigo_diagnostico}-${f.codigo_falla}</td><td class="mono" style="text-align:right;">${f.cantidad}</td></tr>`;
+      return `<tr><td class="mono">${f.fecha}</td><td>${f.diagnostico}</td><td>${f.controlador}</td><td class="mono" style="color:${color};">${f.codigo_diagnostico}</td><td class="mono" style="color:${color};">${f.codigo_falla}</td><td class="mono" style="text-align:right;">${f.cantidad}</td></tr>`;
     }).join("");
 }
 
 function renderTicker(){
   const recientes=getFallasSerie().slice(-14);
-  const html=recientes.map(f=>`<span class="ticker-item"><span class="t-dot"></span><span class="t-code mono">${f.codigo_diagnostico}-${f.codigo_falla}</span> ${f.diagnostico} — ${f.placa} · ${f.fecha} · x${f.cantidad}</span>`).join("");
+  const html=recientes.map(f=>{
+    const color=resolveColor(SEVERIDAD_COLOR[clasificarSeveridadFMI(f.codigo_falla)]);
+    return `<span class="ticker-item"><span class="t-dot" style="background:${color};"></span><span class="t-code mono">SPN ${f.codigo_diagnostico} · FMI ${f.codigo_falla}</span> ${f.diagnostico} — ${f.placa} · ${f.fecha} · x${f.cantidad}</span>`;
+  }).join("");
   document.getElementById("tickerTrack").innerHTML=html+html;
 }
 
+/* ================= HOME: TARJETAS DE RESUMEN (últimos 3 meses, todas las unidades) ================= */
+function ventana3Meses(){
+  if(!fechaUltimoDato) return [];
+  const meses=[];
+  for(let i=0;i<3;i++){
+    let m=fechaUltimoDato.getMonth()-i, y=fechaUltimoDato.getFullYear();
+    while(m<0){ m+=12; y--; }
+    meses.push({anio:y, mes:m});
+  }
+  return meses;
+}
+function sumarVentana(campoFn, meses){
+  let total=0;
+  Object.values(DATA).forEach(u=>{
+    (u.diario||[]).forEach(f=>{
+      const d=parseFechaDDMMYYYY(f.fecha);
+      if(meses.some(mv=>mv.anio===d.getFullYear() && mv.mes===d.getMonth())) total+=campoFn(f);
+    });
+  });
+  return total;
+}
+function sumarVentanaFallas(campoFn, meses){
+  let total=0;
+  Object.values(DATA).forEach(u=>{
+    (u.fallas||[]).forEach(f=>{
+      const d=parseFechaDDMMYYYY(f.fecha);
+      if(meses.some(mv=>mv.anio===d.getFullYear() && mv.mes===d.getMonth())) total+=campoFn(f);
+    });
+  });
+  return total;
+}
+// Compara el trimestre actual (3 meses hasta el dato más reciente) contra el trimestre inmediatamente anterior
+function compararTrimestre(campoFn, esFalla){
+  const actualMeses=ventana3Meses();
+  if(actualMeses.length===0) return {actual:0, anterior:0, cambioPorc:0};
+  const anteriorMeses=actualMeses.map(mv=>{ let m=mv.mes-3, y=mv.anio; while(m<0){m+=12;y--;} return {anio:y,mes:m}; });
+  const suma = esFalla ? sumarVentanaFallas : sumarVentana;
+  const actual=suma(campoFn, actualMeses), anterior=suma(campoFn, anteriorMeses);
+  const cambioPorc = anterior===0 ? (actual>0?100:0) : ((actual-anterior)/anterior*100);
+  return {actual, anterior, cambioPorc};
+}
+function unidadExtremaEnVentana(campoFn, meses, buscarMax){
+  let mejor=null;
+  Object.keys(DATA).forEach(p=>{
+    let total=0;
+    (DATA[p].diario||[]).forEach(f=>{
+      const d=parseFechaDDMMYYYY(f.fecha);
+      if(meses.some(mv=>mv.anio===d.getFullYear() && mv.mes===d.getMonth())) total+=campoFn(f);
+    });
+    if(mejor===null || (buscarMax ? total>mejor.total : total<mejor.total)) mejor={placa:p, total};
+  });
+  return mejor;
+}
+
+function renderResumenHome(){
+  const cont=document.getElementById("resumenGrid"); if(!cont) return;
+  cont.innerHTML="";
+  if(Object.keys(DATA).length===0 || !fechaUltimoDato) return;
+  const meses=ventana3Meses();
+
+  const tarjetas=[];
+
+  // 1. Consumo
+  const consumo=compararTrimestre(f=>num(f.combustible_total));
+  const unidadMasConsumo=unidadExtremaEnVentana(f=>num(f.combustible_total), meses, true);
+  const pctUnidadConsumo = consumo.actual>0 && unidadMasConsumo ? (unidadMasConsumo.total/consumo.actual*100) : 0;
+  tarjetas.push({color:"var(--accent)", label:"Consumo (últimos 3 meses)", valor:consumo.actual.toFixed(2)+" gal", cambio:consumo.cambioPorc,
+    frase: unidadMasConsumo ? `${unidadMasConsumo.placa} concentra el ${pctUnidadConsumo.toFixed(2)}% del consumo de la flota` : "Sin datos suficientes",
+    cat:"motor", sub:"consumo"});
+
+  // 2. Rendimiento
+  const galTrim=compararTrimestre(f=>num(f.combustible_total));
+  const horTrim=compararTrimestre(f=>num(f.horas_motor));
+  const rendActual = horTrim.actual>0 ? galTrim.actual/horTrim.actual : 0;
+  const porUnidadRend=Object.keys(DATA).map(p=>{
+    let g=0,h=0;
+    (DATA[p].diario||[]).forEach(f=>{
+      const d=parseFechaDDMMYYYY(f.fecha);
+      if(meses.some(mv=>mv.anio===d.getFullYear()&&mv.mes===d.getMonth())){ g+=num(f.combustible_total); h+=num(f.horas_motor); }
+    });
+    return {placa:p, rend: h>0?g/h:0};
+  }).filter(u=>u.rend>0);
+  const mejorUnidadRend = porUnidadRend.length ? porUnidadRend.reduce((a,b)=>a.rend<b.rend?a:b) : null;
+  tarjetas.push({color:"var(--ok)", label:"Rendimiento (últimos 3 meses)", valor:rendActual.toFixed(2)+" gal/h",
+    cambio: horTrim.actual>0 && horTrim.anterior>0 ? ((rendActual-(galTrim.anterior/Math.max(horTrim.anterior,0.01)))/(galTrim.anterior/Math.max(horTrim.anterior,0.01))*100) : 0,
+    frase: mejorUnidadRend ? `${mejorUnidadRend.placa} es tu unidad más eficiente (${mejorUnidadRend.rend.toFixed(2)} gal/h)` : "Sin datos suficientes",
+    cat:"operacion", sub:"rendimientos"});
+
+  // 3. Uso de Flota
+  let condTrim=0, ralTrim=0, detTrim=0;
+  Object.values(DATA).forEach(u=>{
+    (u.diario||[]).forEach(f=>{
+      const d=parseFechaDDMMYYYY(f.fecha);
+      if(meses.some(mv=>mv.anio===d.getFullYear()&&mv.mes===d.getMonth())){
+        condTrim+=num(f.horas_conduccion); ralTrim+=num(f.horas_ralenti); detTrim+=Math.max(24-num(f.horas_motor),0);
+      }
+    });
+  });
+  const baseTrim=condTrim+ralTrim+detTrim;
+  const pctProductivo = baseTrim>0 ? condTrim/baseTrim*100 : 0;
+  // Unidad con más cambio de % detenido este mes vs mes anterior
+  let unidadMasDetenida=null, mayorAumento=-Infinity;
+  Object.keys(DATA).forEach(p=>{
+    const c1=compararMesAnteriorUnidad(p, f=>Math.max(24-num(f.horas_motor),0));
+    if(c1.cambioPorc>mayorAumento){ mayorAumento=c1.cambioPorc; unidadMasDetenida={placa:p, cambio:c1.cambioPorc}; }
+  });
+  tarjetas.push({color:"var(--warn)", label:"Uso de Flota (últimos 3 meses)", valor:pctProductivo.toFixed(2)+"% productivo",
+    cambio:0,
+    frase: unidadMasDetenida && unidadMasDetenida.cambio>0 ? `${unidadMasDetenida.placa} pasó ${unidadMasDetenida.cambio.toFixed(2)}% más tiempo detenida este mes` : "Sin cambios relevantes en disponibilidad",
+    cat:"operacion", sub:"uso_flota"});
+
+  // 4. Seguridad
+  const criticasTrim=compararTrimestre(f=>clasificarSeveridadFMI(f.codigo_falla)==="critica"?(f.cantidad||1):0, true);
+  const advertenciasTrim=compararTrimestre(f=>clasificarSeveridadFMI(f.codigo_falla)==="advertencia"?(f.cantidad||1):0, true);
+  tarjetas.push({color:"var(--crit)", label:"Seguridad (últimos 3 meses)", valor:criticasTrim.actual+" críticas",
+    cambio:criticasTrim.cambioPorc,
+    frase: criticasTrim.actual>0 ? `${criticasTrim.actual} falla(s) crítica(s) en el trimestre` : `Sin fallas críticas — ${advertenciasTrim.actual} advertencia(s) registradas`,
+    cat:"seguridad", sub:"fallas"});
+
+  // 5. Variables de Motor (refrigerante)
+  const coolTrim=compararTrimestre(f=>num(f.temperatura_prom)>0?num(f.temperatura_prom):0);
+  let diasConDatoCool=0;
+  Object.values(DATA).forEach(u=>{ (u.diario||[]).forEach(f=>{ const d=parseFechaDDMMYYYY(f.fecha); if(meses.some(mv=>mv.anio===d.getFullYear()&&mv.mes===d.getMonth()) && num(f.temperatura_prom)>0) diasConDatoCool++; }); });
+  const coolProm = diasConDatoCool>0 ? coolTrim.actual/diasConDatoCool : 0;
+  let unidadMasCaliente=null, mayorCambioCool=-Infinity;
+  Object.keys(DATA).forEach(p=>{
+    const c=compararMesAnteriorUnidad(p, f=>num(f.temperatura_prom));
+    if(c.cambioPorc>mayorCambioCool && c.actual>0){ mayorCambioCool=c.cambioPorc; unidadMasCaliente={placa:p, cambio:c.cambioPorc}; }
+  });
+  tarjetas.push({color:"var(--accent)", label:"Variables de Motor (últimos 3 meses)", valor:coolProm.toFixed(2)+"°C refrigerante",
+    cambio:0,
+    frase: unidadMasCaliente && unidadMasCaliente.cambio>0 ? `${unidadMasCaliente.placa} corre ${unidadMasCaliente.cambio.toFixed(2)}% más caliente que antes` : "Temperaturas estables en el trimestre",
+    cat:"motor", sub:"variables"});
+
+  tarjetas.forEach(t=>{
+    const card=document.createElement("div"); card.className="resumen-card";
+    card.style.setProperty("--rc-color", t.color);
+    card.innerHTML=`<div class="rc-lbl">${t.label}</div><div class="rc-val">${t.valor}${t.cambio?chipComparativo(t.cambio):''}</div><div class="rc-frase">${t.frase}</div>`;
+    card.addEventListener("click",()=>mostrarApp(t.cat, t.sub));
+    cont.appendChild(card);
+  });
+}
+// Compara un campo de UNA unidad específica, mes actual vs mes calendario anterior (para detectar la unidad más "movida")
+function compararMesAnteriorUnidad(placa, campoFn){
+  const u=DATA[placa]; if(!u) return {actual:0,anterior:0,cambioPorc:0};
+  let actual=0, anterior=0, diasActual=0, diasAnterior=0;
+  let am=mesActual-1, aa=anioActual; if(am<0){am=11;aa--;}
+  (u.diario||[]).forEach(f=>{
+    const d=parseFechaDDMMYYYY(f.fecha);
+    if(d.getFullYear()===anioActual && d.getMonth()===mesActual){ actual+=campoFn(f); diasActual++; }
+    if(d.getFullYear()===aa && d.getMonth()===am){ anterior+=campoFn(f); diasAnterior++; }
+  });
+  const actualProm = diasActual? actual/diasActual : actual;
+  const anteriorProm = diasAnterior? anterior/diasAnterior : anterior;
+  const cambioPorc = anteriorProm===0 ? (actualProm>0?100:0) : ((actualProm-anteriorProm)/anteriorProm*100);
+  return {actual:actualProm, anterior:anteriorProm, cambioPorc};
+}
+
 window.addEventListener("resize",()=>{
-  document.querySelectorAll('[id^="g_"],#trendMotor,#trendOperacion,#trendGalones,#trendEncendidos').forEach(el=>{ const i=echarts.getInstanceByDom(el); if(i) i.resize(); });
+  document.querySelectorAll('[id^="g_"],#trendMotor,#trendOperacion,#trendGalones,#trendEncendidos,#trendUsoFlotaBarras,#trendFallas').forEach(el=>{ const i=echarts.getInstanceByDom(el); if(i) i.resize(); });
 });
 
 init();
