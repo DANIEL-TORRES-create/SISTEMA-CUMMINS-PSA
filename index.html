@@ -245,13 +245,13 @@
 #appRoot .view-toggle {display:flex;gap:2px;background:var(--bg-raised);border:1px solid var(--line);border-radius:6px;padding:2px;}
 #appRoot .view-toggle .v-opt {padding:6px 13px;font-size:11px;font-family:'IBM Plex Mono';border-radius:4px;color:var(--text-dim);cursor:pointer;letter-spacing:.02em;}
 #appRoot .view-toggle .v-opt.active {background:var(--accent);color:#fff;}
-#appRoot .view-toggle.sev-toggle .v-opt.active {background:#A78BFA;color:#fff;} /* toggles de SEVERIDAD: morado, distinto del azul de "vista" */
-#appRoot .view-toggle.metrica-toggle .v-opt.active {background:#34C795;color:#fff;} /* toggle de MÉTRICA (gal/hora vs km/galón): verde, distinto del azul de "vista" */
-#appRoot .view-toggle.serie-toggle .v-opt.active {background:#F59E0B;color:#fff;} /* toggle de SERIE SECUNDARIA (Horas Motor vs Km): naranja, distinto de los demás */
+#appRoot .view-toggle.sev-toggle .v-opt.active {background:var(--opt-color, #A78BFA);color:#fff;} /* cada opción usa el color real de esa severidad (Crítica=rojo, Advertencia=naranja, Informativa=gris, Todas=azul) */
+#appRoot .view-toggle.metrica-toggle .v-opt.active {background:var(--opt-color, #34C795);color:#fff;} /* cada opción usa el color real de SU línea en el gráfico (gal/hora=azul, km/galón=celeste) */
+#appRoot .view-toggle.serie-toggle .v-opt.active {background:var(--opt-color, #F59E0B);color:#fff;} /* toggle de SERIE SECUNDARIA: cada botón se resalta con el color real de SU línea (Horas Motor=verde, Km=naranja) */
 #appRoot .panel-title.between {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
 
   /* ===== TABLAS COMPARATIVAS (unidad x mes) ===== */
-#appRoot .compare-wrap {overflow-x:auto;}
+#appRoot .compare-wrap {overflow-x:auto;max-height:400px;overflow-y:auto;} /* límite de raíz: CUALQUIER tabla que crezca por unidades/meses queda con scroll interno, nunca estira el panel */
 #appRoot .compare-table {width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;}
 #appRoot .compare-table th {text-align:left;padding:10px 10px;color:var(--text-primary);font-weight:700;font-size:11px;letter-spacing:.04em;text-transform:uppercase;border-bottom:2px solid var(--accent);background:var(--bg-raised);position:sticky;top:0;z-index:5;}
 #appRoot .compare-table td {padding:7px 10px;border-bottom:1px solid var(--line);color:var(--text-secondary);}
@@ -463,8 +463,8 @@
                 <div class="v-opt" data-v="unidad">Por Unidad</div>
               </div>
               <div class="view-toggle serie-toggle" id="consumoSerieToggle">
-                <div class="v-opt active" data-v="horas">Horas Motor</div>
-                <div class="v-opt" data-v="km">Km Recorridos</div>
+                <div class="v-opt active" data-v="horas" style="--opt-color:#2DD9A0;">Horas Motor</div>
+                <div class="v-opt" data-v="km" style="--opt-color:#F59E0B;">Km Recorridos</div>
               </div>
             </div>
             <div class="trend-chart" id="trendGalones" style="height:220px;"></div>
@@ -513,8 +513,8 @@
             <span id="tituloTrendOperacion">Horas motor acumuladas</span>
             <div style="display:flex;gap:8px;flex-wrap:wrap;" id="operacionToggles">
               <div class="view-toggle metrica-toggle" id="rendimientoMetricaToggle" style="display:none;">
-                <div class="v-opt active" data-v="galhora">gal/hora</div>
-                <div class="v-opt" data-v="kmgal">km/galón</div>
+                <div class="v-opt active" data-v="galhora" style="--opt-color:#5FACE0;">gal/hora</div>
+                <div class="v-opt" data-v="kmgal" style="--opt-color:#22D3EE;">km/galón</div>
               </div>
               <div class="view-toggle" id="rendimientoViewToggle" style="display:none;">
                 <div class="v-opt active" data-v="diario">Diario</div>
@@ -560,10 +560,10 @@
           <div class="panel-title between">
             <span>Fallas más frecuentes del período</span>
             <div class="view-toggle sev-toggle" id="sevFiltroTop">
-              <div class="v-opt active" data-v="todas">Todas</div>
-              <div class="v-opt" data-v="critica">Crítica</div>
-              <div class="v-opt" data-v="advertencia">Advertencia</div>
-              <div class="v-opt" data-v="informativa">Informativa</div>
+              <div class="v-opt active" data-v="todas" style="--opt-color:#5FACE0;">Todas</div>
+              <div class="v-opt" data-v="critica" style="--opt-color:#FF3B3B;">Crítica</div>
+              <div class="v-opt" data-v="advertencia" style="--opt-color:#FFB020;">Advertencia</div>
+              <div class="v-opt" data-v="informativa" style="--opt-color:#6B7280;">Informativa</div>
             </div>
           </div>
           <div id="topFallasList"></div>
@@ -576,10 +576,10 @@
             <span>Cantidad de fallas</span>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <div class="view-toggle sev-toggle" id="sevFiltroChart">
-                <div class="v-opt active" data-v="todas">Todas</div>
-                <div class="v-opt" data-v="critica">Crítica</div>
-                <div class="v-opt" data-v="advertencia">Advertencia</div>
-                <div class="v-opt" data-v="informativa">Informativa</div>
+                <div class="v-opt active" data-v="todas" style="--opt-color:#5FACE0;">Todas</div>
+                <div class="v-opt" data-v="critica" style="--opt-color:#FF3B3B;">Crítica</div>
+                <div class="v-opt" data-v="advertencia" style="--opt-color:#FFB020;">Advertencia</div>
+                <div class="v-opt" data-v="informativa" style="--opt-color:#6B7280;">Informativa</div>
               </div>
               <div class="view-toggle" id="fallasViewToggle">
                 <div class="v-opt active" data-v="diario">Diario</div>
@@ -767,7 +767,8 @@ const COLORS={ok:"#2DD9A0",warn:"#FFB020",crit:"#FF3B3B",brand:"#CC0000",accent:
 // Etiqueta de dato SIEMPRE visible (no solo al pasar el cursor) — el zoom ya limita a ~15 puntos
 // visibles a la vez, así que mostrar el valor encima de cada punto no se satura.
 const LABEL_TOP = {show:true, position:'top', color:'#E8E8EA', fontSize:10, fontFamily:"'IBM Plex Mono'", fontWeight:600};
-const LABEL_INSIDE = {show:true, position:'inside', color:'#181818', fontSize:9, fontFamily:"'IBM Plex Mono'", fontWeight:600}; // para barras apiladas (Uso de Flota)
+const LABEL_INSIDE = {show:true, position:'inside', color:'#181818', fontSize:9, fontFamily:"'IBM Plex Mono'", fontWeight:600, formatter:p=>p.value>=1?p.value:''}; // para barras apiladas (Uso de Flota) — segmentos muy chicos (<1h) esconden el número en vez de amontonarlo
+const LABEL_TOP_OSCURO = {show:true, position:'top', color:'#181818', fontSize:10, fontFamily:"'IBM Plex Mono'", fontWeight:700}; // para series de color CLARO (ej. amarillo de Encendidos) donde el texto blanco no contrasta bien
 function resolveColor(v){
   if(typeof v==="string" && v.startsWith("var(")) return getComputedStyle(document.documentElement).getPropertyValue(v.replace("var(","").replace(")","")).trim();
   return v;
@@ -794,9 +795,11 @@ function mostrarHome(){
   const v=document.getElementById("videoIntro"); if(v) v.pause();
   document.getElementById("screenHome").classList.add("show");
   document.getElementById("screenApp").classList.remove("show");
-  // Home/Login/Video son pantallas de "toma completa" — necesitan la altura fija de appRoot
+  // Home/Login/Video son pantallas de "toma completa" — necesitan la altura fija de appRoot.
+  // Se fijan overflow-x y overflow-y explícitamente los DOS (no solo uno) para no heredar
+  // por accidente un valor "visible" que quedó de mostrarApp() y dispare la misma mezcla que rompe el sticky.
   const root=document.getElementById("appRoot");
-  if(root){ root.style.height="100vh"; root.style.overflowY="auto"; }
+  if(root){ root.style.height="100vh"; root.style.minHeight=""; root.style.overflowY="auto"; root.style.overflowX="hidden"; }
   ajustarAltoAppRoot();
 }
 function mostrarApp(cat, sub){
@@ -804,8 +807,15 @@ function mostrarApp(cat, sub){
   document.getElementById("screenApp").classList.add("show");
   // El dashboard NO usa altura fija — fluye en su alto natural, así el único scroll
   // que existe es el de la página de MyGeotab, y el sticky se ancla a ese único scroll.
+  // min-height (no height fija) asegura que nunca quede más corto que una pantalla completa
+  // — evita el hueco negro debajo del ticker cuando el contenido no llena la pantalla —
+  // pero sigue creciendo libremente si el contenido real necesita más espacio.
   const root=document.getElementById("appRoot");
-  if(root){ root.style.height="auto"; root.style.overflowY="visible"; }
+  // CLAVE: overflow-x y overflow-y deben coincidir en "visible" — si uno queda "hidden" y el otro
+  // "visible", el navegador convierte el "visible" en "auto" por su cuenta, y #appRoot vuelve a
+  // comportarse como su propio contenedor de scroll (rompiendo el sticky del encabezado/menú,
+  // que entonces se "engancha" a #appRoot en vez de al scroll real de la página que lo contiene).
+  if(root){ root.style.height="auto"; root.style.minHeight="100vh"; root.style.overflowY="visible"; root.style.overflowX="visible"; }
   categoriaActual=cat;
 
   // Limpia el estado activo de TODA la navegación (categoría + submenús) antes de marcar el correcto
@@ -1338,7 +1348,7 @@ let variablesMatrizSeleccionadas=["rpm","oil","coolant","carga","manifold"]; // 
 const VAR_LABELS={rpm:"RPM",oil:"Aceite",coolant:"Refrigerante",carga:"Carga",manifold:"Admisión"};
 
 function buildVarSelector(){
-  buildVarSelectorGeneric("varSelector", variablesSeleccionadas, renderMotorVariables);
+  buildVarSelectorGeneric("varSelector", variablesSeleccionadas, ()=>{ buildVarSelector(); renderMotorVariables(); });
 }
 
 function renderMotorVariables(){
@@ -1353,7 +1363,7 @@ function renderMotorVariables(){
     const serie=filtrarPorPeriodo(getStatsSerie(vid));
     const valores=serie.map(f=>r2(f[metricaActual]));
     const color=resolveColor(g.color);
-    return {name:VAR_LABELS[vid], type:'line', smooth:true, data:valores, itemStyle:{color}, lineStyle:{width:2}, symbol:'circle', symbolSize:5, areaStyle: multiple?undefined:{color:color+"22"}, label: multiple?{show:false}:LABEL_TOP};
+    return {name:VAR_LABELS[vid], type:'line', smooth:true, data:valores, itemStyle:{color}, lineStyle:{width:2}, symbol:'circle', symbolSize:5, areaStyle: multiple?undefined:{color:color+"22"}, label:LABEL_TOP};
   });
 
   const trend=echarts.getInstanceByDom(document.getElementById("trendMotor"))||echarts.init(document.getElementById("trendMotor"));
@@ -1363,6 +1373,9 @@ function renderMotorVariables(){
     legend: multiple ? {top:0,textStyle:{color:'#A8A8AC',fontSize:10}} : undefined,
     tooltip:{trigger:'axis',backgroundColor:'var(--bg-panel)',borderColor:'var(--line)',textStyle:{color:'#E8E8EA',fontSize:11},formatter:p=>p[0].axisValue},
     dataZoom:dataZoomConfig(fechas.length),
+    // Con varias variables a la vez, sus etiquetas de valor pueden pisarse entre sí — esto las
+    // corre automáticamente para que no se amontonen ni se vuelvan ilegibles.
+    labelLayout: multiple ? {moveOverlap:'shiftY'} : undefined,
     xAxis:{type:'category',data:fechas,axisLine:{lineStyle:{color:'#454649'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
     yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
     series
@@ -1508,7 +1521,7 @@ function renderConsumoMotor(){
   if(consumoVista==="diario"){
     const dias = filtrarPorPeriodo(getEcmDiasSerie());
     const fechas = dias.map(f=>f.fecha.split("/")[0]);
-    chart.setOption({grid:{left:45,right:50,top:30,bottom:34},
+    chart.setOption({grid:{left:45,right:50,top:30,bottom:34}, labelLayout:{moveOverlap:'shiftY'},
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1520,7 +1533,7 @@ function renderConsumoMotor(){
       ]},true);
   } else if(consumoVista==="mensual"){
     const porMes=agruparPorMes(getDiarioSerieCompleta(),["galones","horasMotor","km"]);
-    chart.setOption({grid:{left:45,right:50,top:30,bottom:50},
+    chart.setOption({grid:{left:45,right:50,top:30,bottom:50}, labelLayout:{moveOverlap:'shiftY'},
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:[{type:'value',name:'gal',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1531,7 +1544,7 @@ function renderConsumoMotor(){
       ]},true);
   } else {
     const porUnidad=porUnidadTotales(["galones","horasMotor","km"]);
-    chart.setOption({grid:{left:60,right:50,top:30,bottom:34},
+    chart.setOption({grid:{left:60,right:50,top:30,bottom:34}, labelLayout:{moveOverlap:'shiftY'},
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(porUnidad.length),
       xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1635,37 +1648,37 @@ function renderEncendidos(){
   if(encendidosVista==="diario"){
     const diasPeriodo=filtrarPorPeriodo(getDiarioSerieCompleta());
     const fechas=diasPeriodo.map(f=>f.fecha.split("/")[0]);
-    chart.setOption({grid:{left:45,right:50,top:30,bottom:34},
+    chart.setOption({grid:{left:45,right:50,top:30,bottom:34}, labelLayout:{moveOverlap:'shiftY'},
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'#',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Encendidos',type:'bar',data:diasPeriodo.map(f=>Math.round(f.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP},
+        {name:'Encendidos',type:'bar',data:diasPeriodo.map(f=>Math.round(f.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP_OSCURO},
         {name:'Horas motor',type:'line',yAxisIndex:1,data:diasPeriodo.map(f=>r2(f.horasMotor)),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2},label:LABEL_TOP}
       ]},true);
   } else if(encendidosVista==="mensual"){
     const porMes=agruparPorMes(getDiarioSerieCompleta(),["encendidos","horasMotor"]);
-    chart.setOption({grid:{left:45,right:50,top:30,bottom:50},
+    chart.setOption({grid:{left:45,right:50,top:30,bottom:50}, labelLayout:{moveOverlap:'shiftY'},
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:[{type:'value',name:'#',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Encendidos',type:'bar',data:porMes.map(m=>Math.round(m.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP},
+        {name:'Encendidos',type:'bar',data:porMes.map(m=>Math.round(m.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP_OSCURO},
         {name:'Horas motor',type:'line',yAxisIndex:1,data:porMes.map(m=>r2(m.horasMotor)),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2},label:LABEL_TOP}
       ]},true);
   } else {
     const porUnidad=porUnidadTotales(["encendidos","horasMotor"]);
-    chart.setOption({grid:{left:60,right:50,top:30,bottom:34},
+    chart.setOption({grid:{left:60,right:50,top:30,bottom:34}, labelLayout:{moveOverlap:'shiftY'},
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(porUnidad.length),
       xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'#',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Encendidos',type:'bar',data:porUnidad.map(u=>Math.round(u.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP},
+        {name:'Encendidos',type:'bar',data:porUnidad.map(u=>Math.round(u.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP_OSCURO},
         {name:'Horas motor',type:'bar',yAxisIndex:1,data:porUnidad.map(u=>r2(u.horasMotor)),itemStyle:{color:COLORS.ok},label:LABEL_TOP}
       ]},true);
   }
@@ -1741,16 +1754,26 @@ function renderRendimientos(){
   const trend=echarts.getInstanceByDom(document.getElementById("trendOperacion"))||echarts.init(document.getElementById("trendOperacion"));
   trend.clear();
 
+  // Color de la línea/barra coincide con el color activo del toggle de métrica (mismo criterio que en Consumo)
+  const colorMetrica = rendimientoMetrica==="kmgal" ? "#22D3EE" : "#5FACE0";
+  // Límite de valores absurdos SOLO para lo que se dibuja en el gráfico diario (un día con horas motor
+  // o km casi en cero puede inflar la razón a un número irreal) — no toca los totales/promedios de los KPI.
+  const limpiarValorAbsurdo = v => {
+    if(rendimientoMetrica==="kmgal" && v>50) return 0;
+    if(rendimientoMetrica==="galhora" && v>20) return 0;
+    return v;
+  };
+
   if(rendimientoVista==="diario"){
     const dias = filtrarPorPeriodo(getEcmDiasSerie());
     const fechas = dias.map(f=>f.fecha.split("/")[0]);
-    const rendimientoDia = dias.map(f=> r2(calcularRendimiento(f.galones, f.horasMotor, f.km)));
+    const rendimientoDia = dias.map(f=> limpiarValorAbsurdo(r2(calcularRendimiento(f.galones, f.horasMotor, f.km))));
     trend.setOption({grid:{left:50,right:20,top:16,bottom:34},
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',name:etiquetaRendimiento(),axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
-      series:[{type:'line',data:rendimientoDia,smooth:true,itemStyle:{color:COLORS.accent},areaStyle:{color:COLORS.accent+'22'},symbol:'circle',symbolSize:5,lineStyle:{width:2},label:LABEL_TOP}]},true);
+      series:[{type:'line',data:rendimientoDia,smooth:true,itemStyle:{color:colorMetrica},areaStyle:{color:colorMetrica+'22'},symbol:'circle',symbolSize:5,lineStyle:{width:2},label:LABEL_TOP}]},true);
   } else if(rendimientoVista==="mensual"){
     const porMes=agruparPorMes(getDiarioSerieCompleta(),["galones","horasMotor","km"]);
     const valores=porMes.map(m=>r2(calcularRendimiento(m.galones, m.horasMotor, m.km)));
@@ -1758,7 +1781,7 @@ function renderRendimientos(){
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue},
       xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:{type:'value',name:etiquetaRendimiento(),axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
-      series:[{type:'line',data:valores,smooth:true,itemStyle:{color:COLORS.accent},areaStyle:{color:COLORS.accent+'22'},symbol:'circle',symbolSize:5,lineStyle:{width:2},label:LABEL_TOP}]},true);
+      series:[{type:'line',data:valores,smooth:true,itemStyle:{color:colorMetrica},areaStyle:{color:colorMetrica+'22'},symbol:'circle',symbolSize:5,lineStyle:{width:2},label:LABEL_TOP}]},true);
   } else {
     const porUnidad=porUnidadTotales(["galones","horasMotor","km"]).map(u=>({placa:u.placa, valor:r2(calcularRendimiento(u.galones,u.horasMotor,u.km))}));
     trend.setOption({grid:{left:50,right:20,top:16,bottom:34},
@@ -1766,7 +1789,7 @@ function renderRendimientos(){
       dataZoom:dataZoomConfig(porUnidad.length),
       xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',name:etiquetaRendimiento(),axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
-      series:[{type:'bar',data:porUnidad.map(u=>u.valor),itemStyle:{color:COLORS.accent},label:LABEL_TOP}]},true);
+      series:[{type:'bar',data:porUnidad.map(u=>u.valor),itemStyle:{color:colorMetrica},label:LABEL_TOP}]},true);
   }
 
   const dias = filtrarPorPeriodo(getEcmDiasSerie());
@@ -1867,7 +1890,7 @@ function renderUsoFlota(){
   barChart.clear();
   if(usoFlotaVista==="diario"){
     const fechas=dias.map(f=>f.fecha.split("/")[0]);
-    barChart.setOption({grid:{left:45,right:20,top:30,bottom:34},
+    barChart.setOption({grid:{left:45,right:20,top:30,bottom:34}, labelLayout:{hideOverlap:true},
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1875,18 +1898,18 @@ function renderUsoFlota(){
       series:[
         {name:'Conducción',type:'bar',stack:'h',data:dias.map(f=>r2(f.horasConduccion)),itemStyle:{color:COLORS.ok},label:LABEL_INSIDE},
         {name:'Ralentí',type:'bar',stack:'h',data:dias.map(f=>r2(f.horasRalenti)),itemStyle:{color:COLORS.warn},label:LABEL_INSIDE},
-        {name:'Detenido',type:'bar',stack:'h',data:dias.map(f=>r2(f.tiempoMuerto)),itemStyle:{color:'#4A4B4F'},label:{show:true,position:'inside',color:'#C7C7CA',fontSize:9,fontFamily:"'IBM Plex Mono'",fontWeight:600}}
+        {name:'Detenido',type:'bar',stack:'h',data:dias.map(f=>r2(f.tiempoMuerto)),itemStyle:{color:'#4A4B4F'},label:{show:true,position:'inside',color:'#C7C7CA',fontSize:9,fontFamily:"'IBM Plex Mono'",fontWeight:600,formatter:p=>p.value>=1?p.value:''}}
       ]},true);
   } else {
     const porMes=agruparPorMes(getUsoFlotaSerieCompleta(),["horasConduccion","horasRalenti","tiempoMuerto"]);
-    barChart.setOption({grid:{left:45,right:20,top:30,bottom:50},
+    barChart.setOption({grid:{left:45,right:20,top:30,bottom:50}, labelLayout:{hideOverlap:true},
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:{type:'value',name:'h',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
       series:[
         {name:'Conducción',type:'bar',stack:'h',data:porMes.map(m=>r2(m.horasConduccion)),itemStyle:{color:COLORS.ok},label:LABEL_INSIDE},
         {name:'Ralentí',type:'bar',stack:'h',data:porMes.map(m=>r2(m.horasRalenti)),itemStyle:{color:COLORS.warn},label:LABEL_INSIDE},
-        {name:'Detenido',type:'bar',stack:'h',data:porMes.map(m=>r2(m.tiempoMuerto)),itemStyle:{color:'#4A4B4F'},label:{show:true,position:'inside',color:'#C7C7CA',fontSize:9,fontFamily:"'IBM Plex Mono'",fontWeight:600}}
+        {name:'Detenido',type:'bar',stack:'h',data:porMes.map(m=>r2(m.tiempoMuerto)),itemStyle:{color:'#4A4B4F'},label:{show:true,position:'inside',color:'#C7C7CA',fontSize:9,fontFamily:"'IBM Plex Mono'",fontWeight:600,formatter:p=>p.value>=1?p.value:''}}
       ]},true);
   }
 
@@ -1905,7 +1928,7 @@ function renderUsoFlota(){
     <div class="kpi-row"><span class="k-lbl">Horas de conducción vs. mes anterior</span>${chipComparativo(condMes.cambioPorc,'sube')}</div>
     <div class="kpi-row"><span class="k-lbl">Horas de ralentí vs. mes anterior</span>${chipComparativo(ralMes.cambioPorc,'baja')}</div>
     <div style="font-size:11px;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin:14px 0 8px;">Disponibilidad (% conducción) por unidad</div>
-    ${porUnidad.map(u=>`<div class="top-falla-row"><span>${u.placa}</span><span class="mono ${u.pct<20?'warn':'ok'}">${u.pct.toFixed(2)}%</span></div>`).join("")}`;
+    <div style="max-height:240px;overflow-y:auto;">${porUnidad.map(u=>`<div class="top-falla-row"><span>${u.placa}</span><span class="mono ${u.pct<20?'warn':'ok'}">${u.pct.toFixed(2)}%</span></div>`).join("")}</div>`;
 
   // Tabla de desglose: por unidad, tiempo total del mes elegido (días×24h) = conducción+ralentí+detenido, siempre exacto
   let filasDesglose = "<tr><th>Unidad</th><th>Tiempo total (h)</th><th>Horas Motor</th><th>Horas Ralentí</th><th>Horas Conducción</th><th>Tiempo Detenido</th><th>Distancia (km)</th></tr>";
@@ -2054,7 +2077,7 @@ function renderSeguridad(){
       dataZoom:dataZoomConfig(fechasOrdenadas.length),
       xAxis:{type:'category',data:fechasOrdenadas.map(f=>f.split("/")[0]),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
-      series:[{type:'bar',data:fechasOrdenadas.map(f=>porDia[f]),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:LABEL_TOP}]},true);
+      series:[{type:'bar',data:fechasOrdenadas.map(f=>porDia[f]),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:sevFiltroChartActual==="advertencia"?LABEL_TOP_OSCURO:LABEL_TOP}]},true);
   } else if(fallasVista==="mensual"){
     const porMes={};
     fallasFiltroSev.forEach(f=>{
@@ -2067,7 +2090,7 @@ function renderSeguridad(){
       tooltip:{trigger:'axis',formatter:p=>p[0].axisValue},
       xAxis:{type:'category',data:meses.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
-      series:[{type:'bar',data:meses.map(m=>m.cantidad),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:LABEL_TOP}]},true);
+      series:[{type:'bar',data:meses.map(m=>m.cantidad),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:sevFiltroChartActual==="advertencia"?LABEL_TOP_OSCURO:LABEL_TOP}]},true);
   } else {
     const porUnidad=Object.keys(DATA).map(p=>{
       const fallasU = sevFiltroChartActual==="todas" ? (DATA[p].fallas||[]) : (DATA[p].fallas||[]).filter(f=>clasificarSeveridadFMI(f.codigo_falla)===sevFiltroChartActual);
@@ -2078,7 +2101,7 @@ function renderSeguridad(){
       dataZoom:dataZoomConfig(porUnidad.length),
       xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
-      series:[{type:'bar',data:porUnidad.map(u=>u.cantidad),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:LABEL_TOP}]},true);
+      series:[{type:'bar',data:porUnidad.map(u=>u.cantidad),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:sevFiltroChartActual==="advertencia"?LABEL_TOP_OSCURO:LABEL_TOP}]},true);
   }
 
   document.getElementById("tablaFallas").innerHTML=`<tr><th>Fecha</th><th>Diagnóstico</th><th>Controlador</th><th>SPN</th><th>FMI</th><th style="text-align:right;">Cantidad</th></tr>`+
