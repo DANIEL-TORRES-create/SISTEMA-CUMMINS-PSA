@@ -116,7 +116,7 @@ html, body { margin:0; padding:0; }
 #appRoot .subnav-item.disabled:hover {color:var(--text-dim);}
 #appRoot .soon {font-size:8px;color:var(--text-dim);border:1px solid var(--line);border-radius:3px;padding:1px 4px;margin-left:4px;letter-spacing:.03em;}
 
-#appRoot .main {padding:22px 26px 30px;min-height:0;grid-column:2;}
+#appRoot .main {padding:22px 26px 60px;min-height:0;grid-column:2;} /* padding-bottom extra: espacio para que el ticker fijo no tape el último cuadro */
 #appRoot .section-title {display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
 #appRoot .section-title h1 {font-size:19px;font-weight:600;}
 #appRoot .section-title .placa {font-family:'IBM Plex Mono';color:#fff;font-size:13px;background:#000000CC;border:1px solid var(--line-bright);padding:3px 10px;border-radius:4px;}
@@ -158,7 +158,11 @@ html, body { margin:0; padding:0; }
 #appRoot .day-cell.empty {visibility:hidden;}
 
   /* ===== TICKER ===== */
-#appRoot .ticker-wrap {background:var(--bg-panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:9px 0;overflow:hidden;position:relative;}
+#appRoot .ticker-wrap {background:var(--bg-panel);border-top:1px solid var(--line);padding:9px 0;overflow:hidden;
+    position:fixed; bottom:0; z-index:160; box-shadow:0 -2px 10px #00000040;
+    /* left/width los pone JS (ajustarPosicionTicker), igual que el menú — no se puede asumir
+       left:0 porque la app corre embebida dentro de la página de MyGeotab, no en un iframe aislado. */
+  }
 #appRoot .ticker-label {position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;background:var(--brand);color:#fff;padding:0 14px;font-family:'IBM Plex Mono';font-weight:700;font-size:10px;letter-spacing:.06em;z-index:2;}
 #appRoot .ticker-track {display:flex;white-space:nowrap;animation:scroll-left 40s linear infinite;padding-left:150px;}
   @keyframes scroll-left{from{transform:translateX(0);}to{transform:translateX(-50%);}}
@@ -510,6 +514,16 @@ html, body { margin:0; padding:0; }
           <div class="panel"><div class="panel-title">Resumen de encendidos</div><div class="kpi-list" id="kpiEncendidos"></div></div>
           <div class="panel"><div class="panel-title">Comparativo mes a mes y por unidad</div><div class="kpi-list" id="kpiEncendidosComp"></div></div>
         </div>
+        <div class="panel" style="margin-top:14px;">
+          <div class="panel-title between">
+            <span>Comparativa por Unidad y Mes (total) — respeta solo el año elegido arriba</span>
+            <div class="view-toggle" id="encendidosAgrupToggle">
+              <div class="v-opt active" data-v="unidad">Unidad</div>
+              <div class="v-opt active" data-v="mes">Mes</div>
+            </div>
+          </div>
+          <div class="compare-wrap"><table class="compare-table" id="tablaComparativaEncendidos"></table></div>
+        </div>
       </div>
     </div>
 
@@ -541,6 +555,7 @@ html, body { margin:0; padding:0; }
             <div class="view-toggle" id="usoFlotaViewToggle">
               <div class="v-opt active" data-v="diario">Diario</div>
               <div class="v-opt" data-v="mensual">Mensual</div>
+              <div class="v-opt" data-v="unidad">Por Unidad</div>
             </div>
           </div>
           <div class="trend-chart" id="trendUsoFlotaBarras" style="height:220px;"></div>
@@ -779,9 +794,10 @@ const LABEL_TOP_OSCURO = {show:true, position:'top', color:'#181818', fontSize:1
 
 // Tooltip completo al pasar el cursor: día + nombre de cada serie + su valor (no solo el día).
 // "enterosPara": lista de nombres de serie que deben mostrarse como número entero (ej. Encendidos, cantidad de fallas).
-function tooltipConDatos(params, enterosPara){
+function tooltipConDatos(params, enterosPara, esDiario){
   enterosPara = enterosPara || [];
-  const encabezado = `<div style="font-weight:600;margin-bottom:4px;">${params[0].axisValue}</div>`;
+  const etiqueta = esDiario ? `Día: ${params[0].axisValue}` : params[0].axisValue;
+  const encabezado = `<div style="font-weight:600;margin-bottom:4px;">${etiqueta}</div>`;
   const lineas = params.map(p=>{
     const val = enterosPara.includes(p.seriesName) ? Math.round(p.value) : Number(p.value).toFixed(2);
     return p.seriesName ? `${p.marker}${p.seriesName}: <b>${val}</b>` : `${p.marker}<b>${val}</b>`;
@@ -861,7 +877,7 @@ function mostrarApp(cat, sub){
     document.getElementById("tituloTrendOperacion").textContent = subvistaActual==="uso_flota" ? "Horas motor acumuladas" : "Rendimiento diario (gal/hora)";
     document.getElementById("tituloKpiOperacion").textContent = subvistaActual==="uso_flota" ? "Productividad del período" : "Resumen de horas y distancia";
   }
-  requestAnimationFrame(()=>{ render(); ajustarPosicionSidenav(); setTimeout(()=>{ ajustarPosicionSidenav(); resizeAllCharts(); },60); });
+  requestAnimationFrame(()=>{ render(); ajustarPosicionSidenav(); ajustarPosicionTicker(); setTimeout(()=>{ ajustarPosicionSidenav(); ajustarPosicionTicker(); resizeAllCharts(); },60); });
 }
 function resizeAllCharts(){
   document.querySelectorAll('[id^="g_"],#trendMotor,#trendOperacion,#trendGalones,#trendEncendidos').forEach(el=>{ const i=echarts.getInstanceByDom(el); if(i) i.resize(); });
@@ -1027,8 +1043,27 @@ function ajustarPosicionSidenav(){
   const rect = appRoot.getBoundingClientRect();
   sidenav.style.left = Math.max(rect.left, 0) + "px";
   sidenav.style.width = "180px";
+  // El encabezado (sticky) a veces queda un poco más angosto que el ancho real disponible
+  // (width:100% no siempre contempla el espacio real cuando hay un scrollbar de por medio) —
+  // se fuerza al ancho medido real para cerrar ese hueco.
+  const topbar = document.querySelector("#appRoot .topbar");
+  if(topbar) topbar.style.width = rect.width + "px";
 }
 window.addEventListener("resize", ajustarPosicionSidenav);
+
+// Mismo criterio que el menú: el ticker es fixed (fijo abajo, siempre visible), y left/width
+// se miden con JS porque no se puede asumir que #appRoot arranca en el borde de la pantalla.
+function ajustarPosicionTicker(){
+  const screenApp = document.getElementById("screenApp");
+  if(!screenApp || !screenApp.classList.contains("show")) return;
+  const ticker = document.querySelector("#appRoot .ticker-wrap");
+  const appRoot = document.getElementById("appRoot");
+  if(!ticker || !appRoot) return;
+  const rect = appRoot.getBoundingClientRect();
+  ticker.style.left = Math.max(rect.left, 0) + "px";
+  ticker.style.width = rect.width + "px";
+}
+window.addEventListener("resize", ajustarPosicionTicker);
 
 function init(){
   ajustarAltoAppRoot();
@@ -1122,19 +1157,23 @@ function buildAnioMesSelectors(){
   selA.value=anioActual;
   poblarMesesParaAnio();
   selA.addEventListener("change",e=>{ anioActual=parseInt(e.target.value); poblarMesesParaAnio(); diaSeleccionado=null; buildDiaSelector(); render(); });
-  selM.addEventListener("change",e=>{ mesActual=parseInt(e.target.value); diaSeleccionado=null; buildDiaSelector(); render(); });
+  selM.addEventListener("change",e=>{ mesActual = e.target.value===""? null : parseInt(e.target.value); diaSeleccionado=null; buildDiaSelector(); render(); });
   buildDiaSelector();
 }
 
-// Llena el <select> de meses SOLO con los meses que tienen datos para el año elegido
+// Llena el <select> de meses SOLO con los meses que tienen datos para el año elegido, más la
+// opción "Todos" (value="") para ver el año completo sin filtrar por mes — mismo patrón que
+// "Todo el mes" ya usa el selector de día.
 function poblarMesesParaAnio(){
   const disponibles=obtenerMesesDisponibles();
   const selM=document.getElementById("selMes");
   selM.innerHTML="";
+  const optTodos=document.createElement("option"); optTodos.value=""; optTodos.textContent="Todos"; selM.appendChild(optTodos);
   const mesesDelAnio=MESES.map((m,idx)=>idx).filter(idx=>disponibles.has(anioActual+"-"+idx));
   mesesDelAnio.forEach(idx=>{ const o=document.createElement("option"); o.value=idx; o.textContent=MESES[idx]; selM.appendChild(o); });
-  if(!mesesDelAnio.includes(mesActual)) mesActual = mesesDelAnio[mesesDelAnio.length-1] ?? mesActual;
-  selM.value=mesActual;
+  // Si el mes elegido ya no existe para este año (y no es explícitamente "Todos"), cae al más reciente disponible
+  if(mesActual!==null && !mesesDelAnio.includes(mesActual)) mesActual = mesesDelAnio[mesesDelAnio.length-1] ?? mesActual;
+  selM.value = mesActual===null ? "" : mesActual;
 }
 
 // Reconstruye por completo los <select> de año/mes (por si cambiaron los datos disponibles,
@@ -1154,6 +1193,10 @@ function sincronizarSelectoresPeriodo(){
 function buildDiaSelector(){
   const selD=document.getElementById("selDia"); selD.innerHTML="";
   const optTodo=document.createElement("option"); optTodo.value=""; optTodo.textContent="Todo el mes"; selD.appendChild(optTodo);
+  // Con "Todos" los meses elegido arriba, elegir un día específico sería ambiguo (¿día X de qué mes?)
+  // — el selector de día queda bloqueado en "Todo el mes" hasta que se elija un mes concreto.
+  if(mesActual===null){ selD.value=""; selD.disabled=true; diaSeleccionado=null; selD.onchange=null; return; }
+  selD.disabled=false;
   const diasConDatos=[...new Set(getEcmDiasSerie().filter(f=>{const d=parseFechaDDMMYYYY(f.fecha);return d.getFullYear()===anioActual&&d.getMonth()===mesActual;}).map(f=>parseInt(f.fecha.split("/")[0])))].sort((a,b)=>a-b);
   diasConDatos.forEach(d=>{ const o=document.createElement("option"); o.value=d; o.textContent="Día "+d; selD.appendChild(o); });
   selD.value = diaSeleccionado ?? "";
@@ -1161,7 +1204,7 @@ function buildDiaSelector(){
 }
 
 function filtrarPorPeriodo(arr){
-  return arr.filter(f=>{ const d=parseFechaDDMMYYYY(f.fecha); if(d.getFullYear()!==anioActual||d.getMonth()!==mesActual) return false; if(diaSeleccionado!==null&&d.getDate()!==diaSeleccionado) return false; return true; });
+  return arr.filter(f=>{ const d=parseFechaDDMMYYYY(f.fecha); if(d.getFullYear()!==anioActual) return false; if(mesActual!==null && d.getMonth()!==mesActual) return false; if(diaSeleccionado!==null&&d.getDate()!==diaSeleccionado) return false; return true; });
 }
 
 // Serie de estadísticas (rpm/carga/oil/coolant/manifold) para la unidad actual, tomada
@@ -1240,7 +1283,9 @@ function render(){
   document.getElementById("statTotal").textContent=Object.keys(DATA).length;
   const elUlt=document.getElementById("statUltimaActualizacion");
   if(elUlt) elUlt.textContent = fechaUltimoDato ? ("0"+fechaUltimoDato.getDate()).slice(-2)+"/"+("0"+(fechaUltimoDato.getMonth()+1)).slice(-2)+"/"+fechaUltimoDato.getFullYear() : "—";
-  document.getElementById("selInfo").textContent=diaSeleccionado?`Día ${diaSeleccionado} de ${MESES[mesActual]}`:`${MESES[mesActual]} ${anioActual} · mes completo (promedios)`;
+  document.getElementById("selInfo").textContent = mesActual===null
+    ? `Todos los meses de ${anioActual} (promedios)`
+    : (diaSeleccionado ? `Día ${diaSeleccionado} de ${MESES[mesActual]}` : `${MESES[mesActual]} ${anioActual} · mes completo (promedios)`);
 
   if(categoriaActual==="motor") renderMotor();
   if(categoriaActual==="operacion") renderOperacion();
@@ -1275,9 +1320,18 @@ function sumarMesDiario(anio, mes, campoFn){
   return total;
 }
 // Compara el mes elegido (anioActual/mesActual) contra el mes calendario anterior — ignora el filtro de día.
+// Cuando el filtro de mes está en "Todos" (mesActual===null), las comparativas "vs. mes anterior"
+// no tienen un mes único con el cual compararse — en ese caso, se usa el mes más reciente con datos
+// (fechaUltimoDato) como referencia, igual que si ese mes estuviera explícitamente seleccionado.
+function mesEfectivoParaComparar(){
+  if(mesActual!==null) return {anio:anioActual, mes:mesActual};
+  if(fechaUltimoDato) return {anio:fechaUltimoDato.getFullYear(), mes:fechaUltimoDato.getMonth()};
+  return {anio:anioActual, mes:new Date().getMonth()};
+}
 function compararMesAnterior(campoFn){
-  const actual=sumarMesDiario(anioActual, mesActual, campoFn);
-  let am=mesActual-1, aa=anioActual; if(am<0){am=11;aa--;}
+  const {anio:anioEf, mes:mesEf}=mesEfectivoParaComparar();
+  const actual=sumarMesDiario(anioEf, mesEf, campoFn);
+  let am=mesEf-1, aa=anioEf; if(am<0){am=11;aa--;}
   const anterior=sumarMesDiario(aa, am, campoFn);
   const cambioPorc = anterior===0 ? (actual>0?100:0) : ((actual-anterior)/anterior*100);
   return {actual, anterior, cambioPorc};
@@ -1293,8 +1347,9 @@ function sumarMesFallas(anio, mes, campoFn){
   return total;
 }
 function compararMesAnteriorFallas(campoFn){
-  const actual=sumarMesFallas(anioActual, mesActual, campoFn);
-  let am=mesActual-1, aa=anioActual; if(am<0){am=11;aa--;}
+  const {anio:anioEf, mes:mesEf}=mesEfectivoParaComparar();
+  const actual=sumarMesFallas(anioEf, mesEf, campoFn);
+  let am=mesEf-1, aa=anioEf; if(am<0){am=11;aa--;}
   const anterior=sumarMesFallas(aa, am, campoFn);
   const cambioPorc = anterior===0 ? (actual>0?100:0) : ((actual-anterior)/anterior*100);
   return {actual, anterior, cambioPorc};
@@ -1412,7 +1467,7 @@ function renderMotorVariables(){
   trend.setOption({
     grid:{left:44,right:20,top:multiple?34:16,bottom:34},
     legend: multiple ? {top:0,textStyle:{color:'#A8A8AC',fontSize:10}} : undefined,
-    tooltip:{trigger:'axis',backgroundColor:'var(--bg-panel)',borderColor:'var(--line)',textStyle:{color:'#E8E8EA',fontSize:11},formatter:p=>tooltipConDatos(p)},
+    tooltip:{trigger:'axis',backgroundColor:'var(--bg-panel)',borderColor:'var(--line)',textStyle:{color:'#E8E8EA',fontSize:11},formatter:p=>tooltipConDatos(p,[],true)},
     dataZoom:dataZoomConfig(fechas.length),
     // Con varias variables a la vez, sus etiquetas de valor pueden pisarse entre sí — esto las
     // corre automáticamente para que no se amontonen ni se vuelvan ilegibles.
@@ -1563,7 +1618,7 @@ function renderConsumoMotor(){
     const dias = filtrarPorPeriodo(getEcmDiasSerie());
     const fechas = dias.map(f=>f.fecha.split("/")[0]);
     chart.setOption({grid:{left:45,right:50,top:30,bottom:34}, labelLayout:{moveOverlap:'shiftY'},
-      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p)}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p,[],true)}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'gal',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1690,7 +1745,7 @@ function renderEncendidos(){
     const diasPeriodo=filtrarPorPeriodo(getDiarioSerieCompleta());
     const fechas=diasPeriodo.map(f=>f.fecha.split("/")[0]);
     chart.setOption({grid:{left:45,right:50,top:30,bottom:34}, labelLayout:{moveOverlap:'shiftY'},
-      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p,['Encendidos'])}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p,['Encendidos'],true)}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'#',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1740,6 +1795,62 @@ function renderEncendidos(){
     <div class="kpi-row"><span class="k-lbl">Este mes / mes anterior (total)</span><span class="k-val mono">${Math.round(encActual)} / ${Math.round(encAnterior)}</span></div>
     <div class="kpi-row"><span class="k-lbl">Promedio por unidad</span><span class="k-val mono">${Math.round(promedioPorUnidad)}</span></div>
     <div class="kpi-row"><span class="k-lbl">Día con más encendidos</span><span class="k-val mono">${diaPico?diaPico.fecha+' ('+Math.round(diaPico.encendidos)+')':'—'}</span></div>`;
+  renderComparativaEncendidos();
+}
+
+let encendidosAgrupUnidadOn=true, encendidosAgrupMesOn=true;
+function renderComparativaEncendidos(){
+  const toggle=document.getElementById("encendidosAgrupToggle");
+  if(toggle && !toggle.dataset.wired){
+    toggle.dataset.wired="1";
+    toggle.querySelectorAll(".v-opt").forEach(o=>o.addEventListener("click",()=>{
+      const otro = o.dataset.v==="unidad" ? encendidosAgrupMesOn : encendidosAgrupUnidadOn;
+      if(o.classList.contains("active") && !otro) return;
+      o.classList.toggle("active");
+      if(o.dataset.v==="unidad") encendidosAgrupUnidadOn=o.classList.contains("active");
+      else encendidosAgrupMesOn=o.classList.contains("active");
+      renderComparativaEncendidos();
+    }));
+  }
+
+  const mesesDisponibles=[...obtenerMesesDisponibles()].filter(clave=>clave.startsWith(anioActual+"-")).sort();
+  const unidades=Object.keys(DATA);
+  const sumarCampos=(filas)=>({
+    encendidos: filas.reduce((a,f)=>a+num(f.encendidos),0),
+    horas: filas.reduce((a,f)=>a+num(f.horas_motor),0)
+  });
+
+  let html="<tr>";
+  if(encendidosAgrupMesOn) html+="<th>Mes</th>";
+  if(encendidosAgrupUnidadOn) html+="<th>Unidad</th>";
+  html+="<th>Encendidos</th><th>Horas Motor</th></tr>";
+
+  const filaHtml=(etiquetaMes, etiquetaUnidad, filas)=>{
+    const s=sumarCampos(filas);
+    return `<tr>${etiquetaMes!==null?`<td class="mono">${etiquetaMes}</td>`:''}${etiquetaUnidad!==null?`<td>${etiquetaUnidad}</td>`:''}<td class="mono">${Math.round(s.encendidos)}</td><td class="mono">${s.horas.toFixed(2)}</td></tr>`;
+  };
+
+  if(encendidosAgrupUnidadOn && encendidosAgrupMesOn){
+    mesesDisponibles.forEach(clave=>{
+      const [y,m]=clave.split("-").map(Number);
+      unidades.forEach(p=>{
+        const filas=(DATA[p].diario||[]).filter(f=>{const d=parseFechaDDMMYYYY(f.fecha); return d.getFullYear()===y&&d.getMonth()===m;});
+        html+=filaHtml(MESES[m].slice(0,3)+" "+y, p, filas);
+      });
+    });
+  } else if(encendidosAgrupMesOn){
+    mesesDisponibles.forEach(clave=>{
+      const [y,m]=clave.split("-").map(Number);
+      const filas=unidades.flatMap(p=>(DATA[p].diario||[]).filter(f=>{const d=parseFechaDDMMYYYY(f.fecha); return d.getFullYear()===y&&d.getMonth()===m;}));
+      html+=filaHtml(MESES[m].slice(0,3)+" "+y, null, filas);
+    });
+  } else {
+    unidades.forEach(p=>{
+      const filas=(DATA[p].diario||[]).filter(f=>{const d=parseFechaDDMMYYYY(f.fecha); return d.getFullYear()===anioActual;});
+      html+=filaHtml(null, p, filas);
+    });
+  }
+  document.getElementById("tablaComparativaEncendidos").innerHTML=html;
 }
 
 /* ================= OPERACIÓN: RENDIMIENTOS / USO DE FLOTA ================= */
@@ -1810,7 +1921,7 @@ function renderRendimientos(){
     const fechas = dias.map(f=>f.fecha.split("/")[0]);
     const rendimientoDia = dias.map(f=> limpiarValorAbsurdo(r2(calcularRendimiento(f.galones, f.horasMotor, f.km))));
     trend.setOption({grid:{left:50,right:20,top:16,bottom:34},
-      tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;margin-bottom:4px;">${p[0].axisValue}</div>${p[0].marker}${Number(p[0].value).toFixed(2)} ${etiquetaRendimiento()}`},
+      tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;margin-bottom:4px;">Día: ${p[0].axisValue}</div>${p[0].marker}${Number(p[0].value).toFixed(2)} ${etiquetaRendimiento()}`},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',name:etiquetaRendimiento(),axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1932,7 +2043,7 @@ function renderUsoFlota(){
   if(usoFlotaVista==="diario"){
     const fechas=dias.map(f=>f.fecha.split("/")[0]);
     barChart.setOption({grid:{left:45,right:20,top:30,bottom:34}, labelLayout:{hideOverlap:true},
-      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p)}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p,[],true)}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',name:'h',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1941,7 +2052,7 @@ function renderUsoFlota(){
         {name:'Ralentí',type:'bar',stack:'h',data:dias.map(f=>r2(f.horasRalenti)),itemStyle:{color:COLORS.warn},label:LABEL_INSIDE},
         {name:'Detenido',type:'bar',stack:'h',data:dias.map(f=>r2(f.tiempoMuerto)),itemStyle:{color:'#4A4B4F'},label:{show:true,position:'inside',color:'#C7C7CA',fontSize:9,fontFamily:"'IBM Plex Mono'",fontWeight:600,formatter:p=>p.value>=1?p.value:''}}
       ]},true);
-  } else {
+  } else if(usoFlotaVista==="mensual"){
     const porMes=agruparPorMes(getUsoFlotaSerieCompleta(),["horasConduccion","horasRalenti","tiempoMuerto"]);
     barChart.setOption({grid:{left:45,right:20,top:30,bottom:50}, labelLayout:{hideOverlap:true},
       tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p)}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
@@ -1951,6 +2062,23 @@ function renderUsoFlota(){
         {name:'Conducción',type:'bar',stack:'h',data:porMes.map(m=>r2(m.horasConduccion)),itemStyle:{color:COLORS.ok},label:LABEL_INSIDE},
         {name:'Ralentí',type:'bar',stack:'h',data:porMes.map(m=>r2(m.horasRalenti)),itemStyle:{color:COLORS.warn},label:LABEL_INSIDE},
         {name:'Detenido',type:'bar',stack:'h',data:porMes.map(m=>r2(m.tiempoMuerto)),itemStyle:{color:'#4A4B4F'},label:{show:true,position:'inside',color:'#C7C7CA',fontSize:9,fontFamily:"'IBM Plex Mono'",fontWeight:600,formatter:p=>p.value>=1?p.value:''}}
+      ]},true);
+  } else {
+    // Por Unidad: respeta el período elegido arriba (igual que las demás vistas "Por Unidad" de la app)
+    const porUnidadHoras=Object.keys(DATA).map(p=>{
+      const diasU=filtrarPorPeriodo((DATA[p].diario||[]).map(f=>({fecha:f.fecha, horasConduccion:num(f.horas_conduccion), horasRalenti:num(f.horas_ralenti), horasMotor:num(f.horas_motor)})));
+      const hc=diasU.reduce((a,f)=>a+f.horasConduccion,0), hr=diasU.reduce((a,f)=>a+f.horasRalenti,0), hm=diasU.reduce((a,f)=>a+f.horasMotor,0);
+      return {placa:p, horasConduccion:hc, horasRalenti:hr, tiempoMuerto:Math.max(diasU.length*24-hm,0)};
+    });
+    barChart.setOption({grid:{left:45,right:20,top:30,bottom:34}, labelLayout:{hideOverlap:true},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p)}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      dataZoom:dataZoomConfig(porUnidadHoras.length),
+      xAxis:{type:'category',data:porUnidadHoras.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
+      yAxis:{type:'value',name:'h',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
+      series:[
+        {name:'Conducción',type:'bar',stack:'h',data:porUnidadHoras.map(u=>r2(u.horasConduccion)),itemStyle:{color:COLORS.ok},label:LABEL_INSIDE},
+        {name:'Ralentí',type:'bar',stack:'h',data:porUnidadHoras.map(u=>r2(u.horasRalenti)),itemStyle:{color:COLORS.warn},label:LABEL_INSIDE},
+        {name:'Detenido',type:'bar',stack:'h',data:porUnidadHoras.map(u=>r2(u.tiempoMuerto)),itemStyle:{color:'#4A4B4F'},label:{show:true,position:'inside',color:'#C7C7CA',fontSize:9,fontFamily:"'IBM Plex Mono'",fontWeight:600,formatter:p=>p.value>=1?p.value:''}}
       ]},true);
   }
 
@@ -2114,7 +2242,7 @@ function renderSeguridad(){
     fallasFiltradasPeriodo.forEach(f=>{ porDia[f.fecha]=(porDia[f.fecha]||0)+(f.cantidad||1); });
     const fechasOrdenadas=Object.keys(porDia).sort((a,b)=>parseFechaDDMMYYYY(a)-parseFechaDDMMYYYY(b));
     chart.setOption({grid:{left:40,right:20,top:16,bottom:34},
-      tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;margin-bottom:4px;">${p[0].axisValue}</div>${p[0].marker}${Math.round(Number(p[0].value))} falla(s)`},
+      tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;margin-bottom:4px;">Día: ${p[0].axisValue}</div>${p[0].marker}${Math.round(Number(p[0].value))} falla(s)`},
       dataZoom:dataZoomConfig(fechasOrdenadas.length),
       xAxis:{type:'category',data:fechasOrdenadas.map(f=>f.split("/")[0]),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -2325,10 +2453,11 @@ function renderResumenHome(){
 function compararMesAnteriorUnidad(placa, campoFn){
   const u=DATA[placa]; if(!u) return {actual:0,anterior:0,cambioPorc:0};
   let actual=0, anterior=0, diasActual=0, diasAnterior=0;
-  let am=mesActual-1, aa=anioActual; if(am<0){am=11;aa--;}
+  const {anio:anioEf, mes:mesEf}=mesEfectivoParaComparar();
+  let am=mesEf-1, aa=anioEf; if(am<0){am=11;aa--;}
   (u.diario||[]).forEach(f=>{
     const d=parseFechaDDMMYYYY(f.fecha);
-    if(d.getFullYear()===anioActual && d.getMonth()===mesActual){ actual+=campoFn(f); diasActual++; }
+    if(d.getFullYear()===anioEf && d.getMonth()===mesEf){ actual+=campoFn(f); diasActual++; }
     if(d.getFullYear()===aa && d.getMonth()===am){ anterior+=campoFn(f); diasAnterior++; }
   });
   const actualProm = diasActual? actual/diasActual : actual;
