@@ -875,33 +875,41 @@ function boot(){
 }
 
 // Auto-detección (NO auto-login directo): cuando la app corre como Add-In dentro de MyGeotab,
-// usa geotabApi.getSession() para saber quién es el usuario ya logueado en MyGeotab y confirma
+// usa el objeto "api" ya autenticado (entregado por MyGeotab vía initialize/focus, guardado en
+// window.__GEOTAB_API__) para saber quién es el usuario ya logueado en MyGeotab, y confirma
 // contra el backend que esté autorizado — pero espera a que la persona haga clic en "ACCEDER"
 // antes de entrar, para que quede bajo su control. Devuelve true si detectó y preparó un usuario
 // válido (el flujo de video sigue normal en cualquier caso).
 let TOKEN_GEOTAB_PENDIENTE = null;
+let geotabDeteccionEnCurso = false; // evita carreras si initialize/focus y boot() la disparan casi a la vez
 async function intentarAutoLoginGeotab(){
-  if(typeof geotabApi === "undefined" || !geotabApi.getSession) return false;
+  const api = window.__GEOTAB_API__;
+  if(!api || typeof api.getSession !== "function") return false;
   if(CONFIG.USAR_DATOS_DEMO) return false; // en modo demo siempre se pide login manual, a propósito
+  if(geotabDeteccionEnCurso || TOKEN_GEOTAB_PENDIENTE) return false; // ya se está resolviendo o ya se resolvió
+  geotabDeteccionEnCurso = true;
   try{
     const session = await new Promise((resolve,reject)=>{
-      geotabApi.getSession(s=>resolve(s), e=>reject(e));
+      api.getSession(result=>resolve(result), err=>reject(err));
     });
-    if(!session || !session.userName) return false;
+    const usuario = session && session.credentials && session.credentials.userName;
+    if(!usuario) return false;
 
     const resp = await fetch(CONFIG.API_URL, {
       method:"POST",
       headers:{"Content-Type":"text/plain;charset=utf-8"},
-      body: JSON.stringify({accion:"login_geotab", usuario:session.userName})
+      body: JSON.stringify({accion:"login_geotab", usuario:usuario})
     });
     const json = await resp.json();
     if(!json.ok || !json.token) return false; // no autorizado -> sin mensaje especial, cae al login manual normal
 
     TOKEN_GEOTAB_PENDIENTE = json.token;
-    mostrarModoGeotab(session.userName);
+    mostrarModoGeotab(usuario);
     return true;
   }catch(e){
     return false; // cualquier falla cae al flujo manual normal, en silencio
+  }finally{
+    geotabDeteccionEnCurso = false;
   }
 }
 
@@ -1188,6 +1196,29 @@ function ajustarPosicionTicker(){
   ticker.style.width = rect.width + "px";
 }
 window.addEventListener("resize", ajustarPosicionTicker);
+
+// ============================================================
+// REGISTRO DEL ADD-IN DE MYGEOTAB
+// MyGeotab NO expone una variable global "geotabApi" — en cambio, la página tiene que registrar
+// un objeto bajo el espacio de nombres "geotab.addin.<nombreUnico>", que MyGeotab llama por su
+// cuenta cuando el Add-In carga, entregándole el objeto "api" YA AUTENTICADO como el usuario que
+// tiene la sesión abierta en MyGeotab. Se registra siempre (sin condición): si la página se abre
+// fuera de MyGeotab, esta función simplemente nunca es invocada por nadie, sin ningún efecto.
+window.geotab = window.geotab || {};
+window.geotab.addin = window.geotab.addin || {};
+window.geotab.addin.comportamientoFlotaPSA = function(){
+  return {
+    initialize: function(api, state, initializeCallback){
+      window.__GEOTAB_API__ = api;
+      initializeCallback(); // obligatorio: MyGeotab espera a que se llame esto para continuar
+    },
+    focus: function(api, state){
+      window.__GEOTAB_API__ = api; // focus siempre trae la referencia más fresca
+      intentarAutoLoginGeotab();
+    },
+    blur: function(api, state){}
+  };
+};
 
 function init(){
   ajustarOverflowAppRoot();
