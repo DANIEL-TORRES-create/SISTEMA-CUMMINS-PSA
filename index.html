@@ -293,6 +293,8 @@ html, body { margin:0; padding:0; }
 #appRoot .home-split {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start;}
 #appRoot .home-col-title {font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--line);}
 #appRoot .resumen-lista {display:flex;flex-direction:column;}
+#appRoot .resumen-seccion {margin-bottom:18px;}
+#appRoot .resumen-seccion-titulo {font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin-bottom:2px;padding:0 4px;}
 #appRoot .resumen-item {display:flex;align-items:flex-start;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;}
 #appRoot .resumen-item:hover .rc-frase {color:var(--text-primary);}
 #appRoot .resumen-item:last-child {border-bottom:none;}
@@ -313,7 +315,7 @@ html, body { margin:0; padding:0; }
 #appRoot .cat-menu-items {display:flex;flex-direction:column;}
 </style>
 
-<div id="appRoot" style="position:relative;width:100%;height:100vh;overflow-y:auto;overflow-x:hidden;">
+<div id="appRoot" style="position:relative;width:100%;min-height:100vh;overflow-y:visible;overflow-x:visible;">
 
 <div id="boot">
   <div class="boot-logo">CARGANDO SISTEMA</div>
@@ -403,6 +405,7 @@ html, body { margin:0; padding:0; }
       <div class="subnav-item active" data-cat="motor" data-sub="variables">Comportamiento del Motor</div>
       <div class="subnav-item" data-cat="motor" data-sub="consumo">Consumo y Uso del Motor</div>
       <div class="subnav-item" data-cat="motor" data-sub="encendidos">Encendidos</div>
+      <div class="subnav-item" data-cat="motor" data-sub="fallas">Fallas</div>
     </div>
 
     <div class="nav-item" data-cat="operacion"><span class="nav-icon-badge"><img class="nav-icon" src="https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconoperacion.png" alt="Operación"></span> OPERACIÓN</div>
@@ -413,7 +416,6 @@ html, body { margin:0; padding:0; }
 
     <div class="nav-item" data-cat="seguridad"><span class="nav-icon-badge"><img class="nav-icon" src="https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconseguridad.png" alt="Seguridad"></span> SEGURIDAD</div>
     <div class="subnav" id="subnav-seguridad">
-      <div class="subnav-item active" data-cat="seguridad" data-sub="fallas">Fallas</div>
       <div class="subnav-item disabled" data-cat="seguridad" data-sub="acelerometro">Acelerómetro <span class="soon">próx.</span></div>
       <div class="subnav-item disabled" data-cat="seguridad" data-sub="velocidad">Exceso de Velocidad <span class="soon">próx.</span></div>
     </div>
@@ -574,6 +576,13 @@ html, body { margin:0; padding:0; }
       <div class="panel" id="panelExtra" style="margin-top:14px;"></div>
     </div>
 
+    <div id="viewSeguridadVacia" style="display:none;">
+      <div class="panel" style="text-align:center;padding:60px 20px;">
+        <div style="font-size:15px;color:var(--text-secondary);margin-bottom:8px;">Próximamente</div>
+        <div style="font-size:12px;color:var(--text-dim);">Acelerómetro y Exceso de Velocidad estarán disponibles en una próxima actualización.</div>
+      </div>
+    </div>
+
     <div id="viewSeguridad" style="display:none;">
       <div class="sev-grid" id="sevGrid"></div>
       <div id="alertaCriticaBanner"></div>
@@ -654,14 +663,14 @@ const HOME_CATEGORIAS = [
   { cat:"motor", icon:"https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconmotor.png", label:"MOTOR", items:[
     {label:"Comportamiento del Motor", sub:"variables"},
     {label:"Consumo y Uso del Motor", sub:"consumo"},
-    {label:"Encendidos", sub:"encendidos"}
+    {label:"Encendidos", sub:"encendidos"},
+    {label:"Fallas", sub:"fallas"}
   ]},
   { cat:"operacion", icon:"https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconoperacion.png", label:"OPERACIÓN", items:[
     {label:"Rendimientos", sub:"rendimientos"},
     {label:"Uso de Flota", sub:"uso_flota"}
   ]},
   { cat:"seguridad", icon:"https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconseguridad.png", label:"SEGURIDAD", items:[
-    {label:"Fallas", sub:"fallas"},
     {label:"Acelerómetro", sub:"acelerometro", disabled:true},
     {label:"Exceso de Velocidad", sub:"velocidad", disabled:true}
   ]}
@@ -824,45 +833,29 @@ function mostrarVideoIntro(){
   const video=document.getElementById("videoIntro");
   video.muted=true; video.currentTime=0; // silenciado por defecto: ningún navegador permite audio sin un clic previo
   video.play().catch(()=>{});
-  // Misma pantalla de "toma completa" que Home/Login — mismo resguardo: fijar overflow-x y
-  // overflow-y explícitamente los DOS, para que nunca queden mezclados (ver mostrarHome()).
-  const root=document.getElementById("appRoot");
-  if(root){ root.style.height="100vh"; root.style.minHeight=""; root.style.overflowY="auto"; root.style.overflowX="hidden"; }
-  ajustarAltoAppRoot();
+  // Mismo criterio que ya funciona en el dashboard: min-height (no altura fija en píxeles) +
+  // overflow visible en los DOS ejes. Así #appRoot nunca es su propio contenedor de scroll —
+  // el único scroll que existe es el de la página real que lo contiene, sin doble scroll.
+  ajustarOverflowAppRoot();
 }
 function mostrarHome(){
   document.getElementById("screenVideoIntro").style.display="none";
   const v=document.getElementById("videoIntro"); if(v) v.pause();
   document.getElementById("screenHome").classList.add("show");
   document.getElementById("screenApp").classList.remove("show");
-  // Home/Login/Video son pantallas de "toma completa" — necesitan la altura fija de appRoot.
-  // Se fijan overflow-x y overflow-y explícitamente los DOS (no solo uno) para no heredar
-  // por accidente un valor "visible" que quedó de mostrarApp() y dispare la misma mezcla que rompe el sticky.
-  const root=document.getElementById("appRoot");
-  if(root){ root.style.height="100vh"; root.style.minHeight=""; root.style.overflowY="auto"; root.style.overflowX="hidden"; }
-  ajustarAltoAppRoot();
+  ajustarOverflowAppRoot();
 }
 function mostrarApp(cat, sub){
   document.getElementById("screenHome").classList.remove("show");
   document.getElementById("screenApp").classList.add("show");
-  // El dashboard NO usa altura fija — fluye en su alto natural, así el único scroll
-  // que existe es el de la página de MyGeotab, y el sticky se ancla a ese único scroll.
-  // min-height (no height fija) asegura que nunca quede más corto que una pantalla completa
-  // — evita el hueco negro debajo del ticker cuando el contenido no llena la pantalla —
-  // pero sigue creciendo libremente si el contenido real necesita más espacio.
-  const root=document.getElementById("appRoot");
-  // CLAVE: overflow-x y overflow-y deben coincidir en "visible" — si uno queda "hidden" y el otro
-  // "visible", el navegador convierte el "visible" en "auto" por su cuenta, y #appRoot vuelve a
-  // comportarse como su propio contenedor de scroll (rompiendo el sticky del encabezado/menú,
-  // que entonces se "engancha" a #appRoot en vez de al scroll real de la página que lo contiene).
-  if(root){ root.style.height="auto"; root.style.minHeight="100vh"; root.style.overflowY="visible"; root.style.overflowX="visible"; }
+  ajustarOverflowAppRoot();
   categoriaActual=cat;
 
   // Limpia el estado activo de TODA la navegación (categoría + submenús) antes de marcar el correcto
   document.querySelectorAll(".nav-item[data-cat]").forEach(n=>n.classList.toggle("active", n.dataset.cat===cat));
   document.querySelectorAll(".subnav-item").forEach(n=>n.classList.remove("active"));
 
-  const subDefault = {motor:"variables", operacion:"rendimientos", seguridad:"fallas"}[cat];
+  const subDefault = {motor:"variables", operacion:"rendimientos", seguridad:null}[cat];
   subvistaActual = sub || subDefault;
   const subEl = document.querySelector(`.subnav-item[data-cat="${cat}"][data-sub="${subvistaActual}"]`);
   if(subEl) subEl.classList.add("active");
@@ -870,7 +863,10 @@ function mostrarApp(cat, sub){
   document.getElementById("catTitle").textContent = {motor:"Motor",operacion:"Operación",seguridad:"Seguridad"}[cat];
   document.getElementById("viewMotor").style.display=cat==="motor"?"block":"none";
   document.getElementById("viewOperacion").style.display=cat==="operacion"?"block":"none";
-  document.getElementById("viewSeguridad").style.display=cat==="seguridad"?"block":"none";
+  // Fallas ahora vive dentro de Motor (no es su propia categoría) — este panel se muestra
+  // solo cuando cat==="motor" Y el submenú elegido es "fallas", no cuando cat==="seguridad".
+  document.getElementById("viewSeguridad").style.display=(cat==="motor" && subvistaActual==="fallas")?"block":"none";
+  document.getElementById("viewSeguridadVacia").style.display=cat==="seguridad"?"block":"none";
   // MIN/PROM/MAX solo tiene sentido en "Variables de Motor" (los demás submódulos ya trabajan con totales/sumas)
   document.getElementById("metricToggle").style.display=(cat==="motor" && subvistaActual==="variables")?"flex":"none";
   if(cat==="operacion"){
@@ -1009,25 +1005,19 @@ function on(id, ev, fn){
 // (standalone: casi 0 de offset, resultado = pantalla completa igual que antes.
 //  dentro de MyGeotab: descuenta el espacio ya ocupado arriba por su propio encabezado,
 //  para no empujar el alto total de la página y generar scroll de más).
-function ajustarAltoAppRoot(){
+// Criterio único para las 4 pantallas (boot, video, home, dashboard): min-height:100vh (nunca
+// altura FIJA en píxeles) + overflow visible en los DOS ejes. Con esto #appRoot nunca se
+// convierte en su propio contenedor de scroll — el único scroll que existe es el de la página
+// real que lo contiene (la de MyGeotab, o el navegador si se abre suelto), sin doble scroll,
+// y con el sticky/fixed del encabezado y el menú funcionando siempre contra ese único scroll.
+function ajustarOverflowAppRoot(){
   const root = document.getElementById("appRoot");
   if(!root) return;
-  // CLAVE: mientras el dashboard (#screenApp) está visible, esta función NO debe hacer nada.
-  // Antes se ejecutaba igual en cada resize/timeout y volvía a forzar una altura fija en píxeles,
-  // deshaciendo el "height:auto" que pone mostrarApp() — eso era lo que resucitaba el segundo scroll.
-  const screenApp = document.getElementById("screenApp");
-  if(screenApp && screenApp.classList.contains("show")) return;
-  // clientHeight del <html> ya excluye cualquier scrollbar externo que MyGeotab esté mostrando
-  // en ese momento — es una medida más confiable que window.innerHeight para este cálculo.
-  const alturaViewport = document.documentElement.clientHeight || window.innerHeight;
-  const offsetTop = root.getBoundingClientRect().top;
-  // Margen de seguridad más generoso: evita que redondeos de subpíxel, bordes o el padding
-  // propio de MyGeotab terminen sumando el pixel de más que dispara su scroll exterior.
-  const altoDisponible = alturaViewport - offsetTop - 24;
-  root.style.height = Math.max(altoDisponible, 480) + "px";
-  root.style.overflowY = "auto";
+  root.style.height = "auto";
+  root.style.minHeight = "100vh";
+  root.style.overflowY = "visible";
+  root.style.overflowX = "visible";
 }
-window.addEventListener("resize", ajustarAltoAppRoot);
 
 // El menú lateral usa position:fixed (más predecible que sticky dentro de un grid), pero "fixed"
 // se ancla a la PÁGINA REAL completa, no a nuestro contenedor — y como la app corre embebida
@@ -1039,14 +1029,20 @@ function ajustarPosicionSidenav(){
   if(!screenApp || !screenApp.classList.contains("show")) return; // solo aplica con el dashboard visible
   const sidenav = document.querySelector("#appRoot .sidenav");
   const appRoot = document.getElementById("appRoot");
+  const topbar = document.querySelector("#appRoot .topbar");
   if(!sidenav || !appRoot) return;
   const rect = appRoot.getBoundingClientRect();
   sidenav.style.left = Math.max(rect.left, 0) + "px";
   sidenav.style.width = "180px";
+  // El menú asumía 64px fijos de alto de encabezado ("top:64px") — si dentro de MyGeotab el
+  // encabezado real mide un poco más (por fuentes/zoom propios de su entorno), el menú se
+  // dibujaba encima de él, tapando el texto "CATEGORÍAS". Se mide el alto real y se usa ese valor.
+  const altoTopbar = topbar ? topbar.getBoundingClientRect().height : 64;
+  sidenav.style.top = altoTopbar + "px";
+  sidenav.style.height = `calc(100vh - ${altoTopbar}px)`;
   // El encabezado (sticky) a veces queda un poco más angosto que el ancho real disponible
   // (width:100% no siempre contempla el espacio real cuando hay un scrollbar de por medio) —
   // se fuerza al ancho medido real para cerrar ese hueco.
-  const topbar = document.querySelector("#appRoot .topbar");
   if(topbar) topbar.style.width = rect.width + "px";
 }
 window.addEventListener("resize", ajustarPosicionSidenav);
@@ -1066,11 +1062,11 @@ function ajustarPosicionTicker(){
 window.addEventListener("resize", ajustarPosicionTicker);
 
 function init(){
-  ajustarAltoAppRoot();
+  ajustarOverflowAppRoot();
   // MyGeotab a veces sigue acomodando su propio layout un instante después de la carga inicial;
   // se reintenta un par de veces más para no quedarnos con una medición tomada demasiado temprano.
-  setTimeout(ajustarAltoAppRoot, 300);
-  setTimeout(ajustarAltoAppRoot, 1000);
+  setTimeout(ajustarOverflowAppRoot, 300);
+  setTimeout(ajustarOverflowAppRoot, 1000);
   boot();
   DATA=CONFIG.USAR_DATOS_DEMO?generarDatosDemo():{};
   if(CONFIG.USAR_DATOS_DEMO) ajustarPeriodoAUltimoDato();
@@ -1289,7 +1285,6 @@ function render(){
 
   if(categoriaActual==="motor") renderMotor();
   if(categoriaActual==="operacion") renderOperacion();
-  if(categoriaActual==="seguridad") renderSeguridad();
   renderTicker();
 }
 
@@ -1572,6 +1567,7 @@ function renderMotor(){
   document.getElementById("subViewConsumo").style.display = subvistaActual==="consumo" ? "block":"none";
   document.getElementById("subViewEncendidos").style.display = subvistaActual==="encendidos" ? "block":"none";
 
+  if(subvistaActual==="fallas"){ renderSeguridad(); return; } // Fallas vive dentro de Motor, pero su contenido sigue en el panel #viewSeguridad (aparte)
   if(subvistaActual==="consumo"){ renderConsumoMotor(); return; }
   if(subvistaActual==="encendidos"){ renderEncendidos(); return; }
 
@@ -2348,36 +2344,28 @@ function renderResumenHome(){
   cont.innerHTML="";
   if(Object.keys(DATA).length===0 || !fechaUltimoDato) return;
   const meses=ventana3Meses();
+  const unidades=Object.keys(DATA);
 
-  const tarjetas=[];
+  // Cada hallazgo: {texto, color, cat, sub}. Se agrupan en 4 secciones; "Atención" solo
+  // muestra las que realmente apliquen (puede quedar vacía y no se dibuja esa sección).
+  const secciones = { seguridad:[], atencion:[], destacados:[], flota:[] };
 
-  // 1. Consumo
-  const consumo=compararTrimestre(f=>num(f.combustible_total));
-  const unidadMasConsumo=unidadExtremaEnVentana(f=>num(f.combustible_total), meses, true);
-  const pctUnidadConsumo = consumo.actual>0 && unidadMasConsumo ? (unidadMasConsumo.total/consumo.actual*100) : 0;
-  tarjetas.push({color:"var(--accent)", label:"Consumo (últimos 3 meses)", valor:consumo.actual.toFixed(2)+" gal", cambio:consumo.cambioPorc, sentido:"baja",
-    frase: unidadMasConsumo ? `${unidadMasConsumo.placa} concentra el ${pctUnidadConsumo.toFixed(2)}% del consumo de la flota` : "Sin datos suficientes",
-    cat:"motor", sub:"consumo"});
+  // ===== 🔴 SEGURIDAD — siempre 1 hallazgo, cambia de tono según el caso =====
+  const criticasTrim=compararTrimestre(f=>clasificarSeveridadFMI(f.codigo_falla)==="critica"?(f.cantidad||1):0, true);
+  const advertenciasTrim=compararTrimestre(f=>clasificarSeveridadFMI(f.codigo_falla)==="advertencia"?(f.cantidad||1):0, true);
+  if(criticasTrim.actual>0){
+    secciones.seguridad.push({texto:`${criticasTrim.actual} falla${criticasTrim.actual===1?'':'s'} crítica${criticasTrim.actual===1?'':'s'} detectada${criticasTrim.actual===1?'':'s'} este trimestre — revisa el módulo de Fallas`, color:"var(--crit)", cat:"motor", sub:"fallas"});
+  } else {
+    secciones.seguridad.push({texto:`Sin fallas críticas este trimestre${advertenciasTrim.actual>0?` (${advertenciasTrim.actual} advertencia${advertenciasTrim.actual===1?'':'s'} registrada${advertenciasTrim.actual===1?'':'s'})`:''}`, color:"var(--ok)", cat:"motor", sub:"fallas"});
+  }
 
-  // 2. Rendimiento
-  const galTrim=compararTrimestre(f=>num(f.combustible_total));
-  const horTrim=compararTrimestre(f=>num(f.horas_motor));
-  const rendActual = horTrim.actual>0 ? galTrim.actual/horTrim.actual : 0;
-  const porUnidadRend=Object.keys(DATA).map(p=>{
-    let g=0,h=0;
-    (DATA[p].diario||[]).forEach(f=>{
-      const d=parseFechaDDMMYYYY(f.fecha);
-      if(meses.some(mv=>mv.anio===d.getFullYear()&&mv.mes===d.getMonth())){ g+=num(f.combustible_total); h+=num(f.horas_motor); }
-    });
-    return {placa:p, rend: h>0?g/h:0};
-  }).filter(u=>u.rend>0);
-  const mejorUnidadRend = porUnidadRend.length ? porUnidadRend.reduce((a,b)=>a.rend<b.rend?a:b) : null;
-  tarjetas.push({color:"var(--ok)", label:"Rendimiento (últimos 3 meses)", valor:rendActual.toFixed(2)+" gal/hora",
-    cambio: horTrim.actual>0 && horTrim.anterior>0 ? ((rendActual-(galTrim.anterior/Math.max(horTrim.anterior,0.01)))/(galTrim.anterior/Math.max(horTrim.anterior,0.01))*100) : 0, sentido:"baja",
-    frase: mejorUnidadRend ? `${mejorUnidadRend.placa} es tu unidad más eficiente (${mejorUnidadRend.rend.toFixed(2)} gal/hora)` : "Sin datos suficientes",
-    cat:"operacion", sub:"rendimientos"});
+  // ===== 🟡 ATENCIÓN — solo los hallazgos que realmente apliquen (umbral mínimo de cambio) =====
+  const consumoTrim=compararTrimestre(f=>num(f.combustible_total));
+  if(Math.abs(consumoTrim.cambioPorc)>=30 && consumoTrim.anterior>0){
+    const subio = consumoTrim.cambioPorc>0;
+    secciones.atencion.push({texto:`El consumo de combustible ${subio?'subió':'bajó'} ${Math.abs(consumoTrim.cambioPorc).toFixed(2)}% este mes vs. el anterior`, color:"var(--warn)", cat:"motor", sub:"consumo"});
+  }
 
-  // 3. Uso de Flota
   let condTrim=0, ralTrim=0, detTrim=0;
   Object.values(DATA).forEach(u=>{
     (u.diario||[]).forEach(f=>{
@@ -2389,67 +2377,101 @@ function renderResumenHome(){
   });
   const baseTrim=condTrim+ralTrim+detTrim;
   const pctProductivo = baseTrim>0 ? condTrim/baseTrim*100 : 0;
-  // Unidad con más cambio de % detenido este mes vs mes anterior
-  let unidadMasDetenida=null, mayorAumento=-Infinity;
-  Object.keys(DATA).forEach(p=>{
-    const c1=compararMesAnteriorUnidad(p, f=>Math.max(24-num(f.horas_motor),0));
-    if(c1.cambioPorc>mayorAumento){ mayorAumento=c1.cambioPorc; unidadMasDetenida={placa:p, cambio:c1.cambioPorc}; }
-  });
-  tarjetas.push({color:"var(--warn)", label:"Uso de Flota (últimos 3 meses)", valor:pctProductivo.toFixed(2)+"% productivo",
-    cambio:0, sentido:"sube",
-    frase: unidadMasDetenida && unidadMasDetenida.cambio>0 ? `${unidadMasDetenida.placa} pasó ${unidadMasDetenida.cambio.toFixed(2)}% más tiempo detenida este mes` : "Sin cambios relevantes en disponibilidad",
-    cat:"operacion", sub:"uso_flota"});
+  if(baseTrim>0 && pctProductivo<20){
+    secciones.atencion.push({texto:`La flota pasó la mayor parte del tiempo detenida (${pctProductivo.toFixed(2)}% productivo)`, color:"var(--warn)", cat:"operacion", sub:"uso_flota"});
+  }
 
-  // 4. Seguridad
-  const criticasTrim=compararTrimestre(f=>clasificarSeveridadFMI(f.codigo_falla)==="critica"?(f.cantidad||1):0, true);
-  const advertenciasTrim=compararTrimestre(f=>clasificarSeveridadFMI(f.codigo_falla)==="advertencia"?(f.cantidad||1):0, true);
-  tarjetas.push({color:"var(--crit)", label:"Seguridad (últimos 3 meses)", valor:criticasTrim.actual+" críticas",
-    cambio:criticasTrim.cambioPorc, sentido:"baja",
-    frase: criticasTrim.actual>0 ? `${criticasTrim.actual} falla(s) crítica(s) en el trimestre` : `Sin fallas críticas — ${advertenciasTrim.actual} advertencia(s) registradas`,
-    cat:"seguridad", sub:"fallas"});
-
-  // 5. Comportamiento del Motor — considera las 5 variables (RPM, Aceite, Refrigerante, Carga, Admisión),
-  // no solo refrigerante. Elige como protagonista la que tenga el mayor cambio % (la más "movida" del trimestre).
-  const VARIABLES_HOME_MOTOR = [
-    {campo:"rpm_prom", label:"RPM", sufijo:""},
-    {campo:"aceite_prom", label:"presión de aceite", sufijo:" PSI"},
-    {campo:"temperatura_prom", label:"refrigerante", sufijo:"°C"},
-    {campo:"carga_prom", label:"carga de motor", sufijo:"%"},
-    {campo:"admision_prom", label:"presión de admisión", sufijo:" PSI"}
-  ];
-  let motorProtagonista=null, motorMayorCambio=-Infinity;
-  VARIABLES_HOME_MOTOR.forEach(v=>{
-    const trimV=compararTrimestre(f=>num(f[v.campo])>0?num(f[v.campo]):0);
-    let dias=0;
-    Object.values(DATA).forEach(u=>{ (u.diario||[]).forEach(f=>{ const d=parseFechaDDMMYYYY(f.fecha); if(meses.some(mv=>mv.anio===d.getFullYear()&&mv.mes===d.getMonth()) && num(f[v.campo])>0) dias++; }); });
-    const prom = dias>0 ? trimV.actual/dias : 0;
-    if(prom<=0) return;
-    let unidadGanadora=null, mayorCambio=-Infinity;
-    Object.keys(DATA).forEach(p=>{
-      const c=compararMesAnteriorUnidad(p, f=>num(f[v.campo]));
-      if(Math.abs(c.cambioPorc)>Math.abs(mayorCambio) && c.actual>0){ mayorCambio=c.cambioPorc; unidadGanadora={placa:p, cambio:c.cambioPorc}; }
+  // Unidad con mayor cambio % en una variable de motor (temperatura, carga) — solo si supera el umbral
+  function mayorCambioUnidad(campo){
+    let ganador=null, mayor=-Infinity;
+    unidades.forEach(p=>{
+      const c=compararMesAnteriorUnidad(p, f=>num(f[campo]));
+      if(Math.abs(c.cambioPorc)>Math.abs(mayor) && c.actual>0 && c.anterior>0){ mayor=c.cambioPorc; ganador={placa:p, cambio:c.cambioPorc}; }
     });
-    if(Math.abs(mayorCambio)>Math.abs(motorMayorCambio)){
-      motorMayorCambio=mayorCambio;
-      motorProtagonista={campo:v.campo, label:v.label, sufijo:v.sufijo, prom, unidadGanadora};
-    }
+    return ganador;
+  }
+  const cambioTemp = mayorCambioUnidad("temperatura_prom");
+  if(cambioTemp && Math.abs(cambioTemp.cambio)>=15){
+    secciones.atencion.push({texto:`${cambioTemp.placa} corre notablemente ${cambioTemp.cambio>0?'más':'menos'} caliente que el mes pasado (${Math.abs(cambioTemp.cambio).toFixed(2)}%)`, color:"var(--warn)", cat:"motor", sub:"variables"});
+  }
+  const cambioCarga = mayorCambioUnidad("carga_prom");
+  if(cambioCarga && Math.abs(cambioCarga.cambio)>=20){
+    secciones.atencion.push({texto:`${cambioCarga.placa} tuvo el mayor cambio en carga de motor vs. mes anterior (${cambioCarga.cambio>0?'+':''}${cambioCarga.cambio.toFixed(2)}%)`, color:"var(--warn)", cat:"motor", sub:"variables"});
+  }
+  // RPM más alto de la flota — no es un cambio %, es un ranking directo del período
+  let unidadMasRpm=null, mayorRpm=-Infinity;
+  unidades.forEach(p=>{
+    const filas=filtrarPorPeriodo((DATA[p].diario||[]).map(f=>({fecha:f.fecha, rpm:num(f.rpm_prom)})));
+    const conDato=filas.filter(f=>f.rpm>0);
+    const prom = conDato.length ? conDato.reduce((a,f)=>a+f.rpm,0)/conDato.length : 0;
+    if(prom>mayorRpm){ mayorRpm=prom; unidadMasRpm={placa:p, rpm:prom}; }
   });
-  tarjetas.push({color:"var(--accent)", label:"Comportamiento del Motor (últimos 3 meses)",
-    valor: motorProtagonista ? motorProtagonista.prom.toFixed(2)+motorProtagonista.sufijo+" "+motorProtagonista.label : "Sin datos suficientes",
-    cambio:0, sentido:"neutral",
-    frase: motorProtagonista && motorProtagonista.unidadGanadora ?
-      `${motorProtagonista.unidadGanadora.placa} cambió ${Math.abs(motorProtagonista.unidadGanadora.cambio).toFixed(2)}% en ${motorProtagonista.label} vs. el mes anterior` : "Variables de motor estables en el trimestre",
-    cat:"motor", sub:"variables"});
+  if(unidadMasRpm && unidadMasRpm.rpm>0){
+    secciones.atencion.push({texto:`${unidadMasRpm.placa} tiene el RPM promedio más alto de la flota (${unidadMasRpm.rpm.toFixed(2)} rpm)`, color:"var(--warn)", cat:"motor", sub:"variables"});
+  }
 
-  tarjetas.forEach(t=>{
-    const item=document.createElement("div"); item.className="resumen-item";
-    item.style.setProperty("--rc-color", t.color);
-    item.innerHTML=`<span class="rc-dot"></span><div><div class="rc-lbl">${t.label}</div><div class="rc-val">${t.valor}${t.cambio?chipComparativo(t.cambio, t.sentido):''}</div><div class="rc-frase">${t.frase}</div></div>`;
-    item.addEventListener("click",()=>mostrarApp(t.cat, t.sub));
-    cont.appendChild(item);
+  // ===== 🟢 DESTACADOS — informativo, contexto útil =====
+  const galTrim=compararTrimestre(f=>num(f.combustible_total));
+  const horTrim=compararTrimestre(f=>num(f.horas_motor));
+  const porUnidadRend=unidades.map(p=>{
+    let g=0,h=0,km=0;
+    (DATA[p].diario||[]).forEach(f=>{
+      const d=parseFechaDDMMYYYY(f.fecha);
+      if(meses.some(mv=>mv.anio===d.getFullYear()&&mv.mes===d.getMonth())){ g+=num(f.combustible_total); h+=num(f.horas_motor); km+=num(f.km); }
+    });
+    return {placa:p, galhora: h>0?g/h:0, kmgal: g>0?km/g:0};
+  });
+  const mejorGalHora = porUnidadRend.filter(u=>u.galhora>0).length ? porUnidadRend.filter(u=>u.galhora>0).reduce((a,b)=>a.galhora<b.galhora?a:b) : null;
+  if(mejorGalHora) secciones.destacados.push({texto:`${mejorGalHora.placa} es tu unidad más eficiente (${mejorGalHora.galhora.toFixed(2)} gal/hora)`, color:"var(--ok)", cat:"operacion", sub:"rendimientos"});
+  const mejorKmGal = porUnidadRend.filter(u=>u.kmgal>0).length ? porUnidadRend.filter(u=>u.kmgal>0).reduce((a,b)=>a.kmgal>b.kmgal?a:b) : null;
+  if(mejorKmGal) secciones.destacados.push({texto:`${mejorKmGal.placa} rinde mejor en distancia (${mejorKmGal.kmgal.toFixed(2)} km/galón)`, color:"var(--ok)", cat:"operacion", sub:"rendimientos"});
+
+  // Más arranques + sus propias horas motor combinados en una sola frase (misma unidad)
+  const porUnidadEncHoras=unidades.map(p=>{
+    let enc=0,h=0;
+    (DATA[p].diario||[]).forEach(f=>{
+      const d=parseFechaDDMMYYYY(f.fecha);
+      if(meses.some(mv=>mv.anio===d.getFullYear()&&mv.mes===d.getMonth())){ enc+=num(f.encendidos); h+=num(f.horas_motor); }
+    });
+    return {placa:p, encendidos:enc, horas:h};
+  });
+  const masArranques = porUnidadEncHoras.filter(u=>u.encendidos>0).length ? porUnidadEncHoras.filter(u=>u.encendidos>0).reduce((a,b)=>a.encendidos>b.encendidos?a:b) : null;
+  if(masArranques) secciones.destacados.push({texto:`${masArranques.placa} tuvo ${Math.round(masArranques.encendidos)} arranques con solo ${masArranques.horas.toFixed(2)} horas de motor`, color:"var(--ok)", cat:"motor", sub:"encendidos"});
+
+  const menosActividad = porUnidadEncHoras.filter(u=>u.horas>0).length ? porUnidadEncHoras.filter(u=>u.horas>0).reduce((a,b)=>a.horas<b.horas?a:b) : null;
+  if(menosActividad) secciones.destacados.push({texto:`${menosActividad.placa} fue la unidad con menos actividad este trimestre (${menosActividad.horas.toFixed(2)} horas motor)`, color:"var(--ok)", cat:"motor", sub:"encendidos"});
+
+  // ===== 📈 TU FLOTA — siempre 1 hallazgo, incluso con 1 sola unidad (incita a agregar más) =====
+  const unidadMasConsumo=unidadExtremaEnVentana(f=>num(f.combustible_total), meses, true);
+  const pctUnidadConsumo = consumoTrim.actual>0 && unidadMasConsumo ? (unidadMasConsumo.total/consumoTrim.actual*100) : 0;
+  if(unidadMasConsumo){
+    secciones.flota.push({texto:`${unidadMasConsumo.placa} concentra el ${pctUnidadConsumo.toFixed(2)}% del consumo de la flota`, color:"var(--accent)", cat:"motor", sub:"consumo"});
+  }
+
+  // ===== Dibuja las secciones (Atención se omite por completo si quedó vacía) =====
+  const defs = [
+    {key:"seguridad", titulo:"🔴 Seguridad"},
+    {key:"atencion", titulo:"🟡 Atención"},
+    {key:"destacados", titulo:"🟢 Destacados"},
+    {key:"flota", titulo:"📈 Tu Flota"}
+  ];
+  defs.forEach(({key,titulo})=>{
+    const hallazgos=secciones[key];
+    if(hallazgos.length===0) return;
+    const wrap=document.createElement("div"); wrap.className="resumen-seccion";
+    const tit=document.createElement("div"); tit.className="resumen-seccion-titulo"; tit.textContent=titulo;
+    wrap.appendChild(tit);
+    hallazgos.forEach(h=>{
+      const item=document.createElement("div"); item.className="resumen-item";
+      item.style.setProperty("--rc-color", h.color);
+      item.innerHTML=`<span class="rc-dot"></span><div class="rc-frase" style="font-weight:600;color:var(--text-primary);">${h.texto}</div>`;
+      item.addEventListener("click",()=>mostrarApp(h.cat, h.sub));
+      wrap.appendChild(item);
+    });
+    cont.appendChild(wrap);
   });
 }
-// Compara un campo de UNA unidad específica, mes actual vs mes calendario anterior (para detectar la unidad más "movida")
+
 function compararMesAnteriorUnidad(placa, campoFn){
   const u=DATA[placa]; if(!u) return {actual:0,anterior:0,cambioPorc:0};
   let actual=0, anterior=0, diasActual=0, diasAnterior=0;
