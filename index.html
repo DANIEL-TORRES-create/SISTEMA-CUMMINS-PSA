@@ -293,15 +293,12 @@ html, body { margin:0; padding:0; }
 #appRoot .home-split {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start;}
 #appRoot .home-col-title {font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--line);}
 #appRoot .resumen-lista {display:flex;flex-direction:column;}
-#appRoot .resumen-seccion {margin-bottom:18px;}
-#appRoot .resumen-seccion-titulo {font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin-bottom:2px;padding:0 4px;}
-#appRoot .resumen-item {display:flex;align-items:flex-start;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;}
-#appRoot .resumen-item:hover .rc-frase {color:var(--text-primary);}
-#appRoot .resumen-item:last-child {border-bottom:none;}
-#appRoot .resumen-item .rc-dot {width:8px;height:8px;border-radius:50%;background:var(--rc-color, var(--accent));margin-top:6px;flex-shrink:0;}
-#appRoot .resumen-item .rc-lbl {font-size:10px;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;}
-#appRoot .resumen-item .rc-val {font-family:'IBM Plex Mono';font-weight:700;font-size:17px;display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;}
-#appRoot .resumen-item .rc-frase {font-size:12px;color:var(--text-secondary);line-height:1.4;transition:color .12s;}
+#appRoot .resumen-seccion {margin-bottom:14px;background:var(--bg-panel);border:1px solid var(--line);border-left:4px solid var(--rs-color, var(--accent));border-radius:8px;padding:14px 18px;}
+#appRoot .resumen-seccion-titulo {font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-primary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+#appRoot .resumen-linea {display:flex;align-items:baseline;gap:8px;padding:6px 0;cursor:pointer;}
+#appRoot .resumen-linea:hover .resumen-linea-texto {color:var(--text-primary);}
+#appRoot .resumen-linea-guion {color:var(--text-dim);flex-shrink:0;}
+#appRoot .resumen-linea-texto {font-size:12.5px;color:var(--text-secondary);line-height:1.5;transition:color .12s;}
 #appRoot .cat-menu {display:flex;flex-direction:column;gap:10px;}
 #appRoot .cat-menu-item {
     background:var(--bg-panel);border:1px solid var(--line);border-left:4px solid var(--cat-color, var(--accent));border-radius:8px;padding:14px 18px;
@@ -849,6 +846,9 @@ function mostrarApp(cat, sub){
   document.getElementById("screenHome").classList.remove("show");
   document.getElementById("screenApp").classList.add("show");
   ajustarOverflowAppRoot();
+  // Al entrar a un módulo/submódulo, la vista debe arrancar desde arriba — como el scroll real
+  // ahora lo controla la página que nos contiene (no #appRoot), hay que resetearlo explícitamente.
+  window.scrollTo(0, 0);
   categoriaActual=cat;
 
   // Limpia el estado activo de TODA la navegación (categoría + submenús) antes de marcar el correcto
@@ -1036,8 +1036,9 @@ function ajustarPosicionSidenav(){
   sidenav.style.width = "180px";
   // El menú asumía 64px fijos de alto de encabezado ("top:64px") — si dentro de MyGeotab el
   // encabezado real mide un poco más (por fuentes/zoom propios de su entorno), el menú se
-  // dibujaba encima de él, tapando el texto "CATEGORÍAS". Se mide el alto real y se usa ese valor.
-  const altoTopbar = topbar ? topbar.getBoundingClientRect().height : 64;
+  // dibujaba encima de él, tapando el texto "CATEGORÍAS". Se mide el alto real y se le suma
+  // un margen extra de seguridad, ya que dentro de MyGeotab sigue quedando un poco corto.
+  const altoTopbar = (topbar ? topbar.getBoundingClientRect().height : 64) + 16;
   sidenav.style.top = altoTopbar + "px";
   sidenav.style.height = `calc(100vh - ${altoTopbar}px)`;
   // El encabezado (sticky) a veces queda un poco más angosto que el ancho real disponible
@@ -2398,16 +2399,16 @@ function renderResumenHome(){
   if(cambioCarga && Math.abs(cambioCarga.cambio)>=20){
     secciones.atencion.push({texto:`${cambioCarga.placa} tuvo el mayor cambio en carga de motor vs. mes anterior (${cambioCarga.cambio>0?'+':''}${cambioCarga.cambio.toFixed(2)}%)`, color:"var(--warn)", cat:"motor", sub:"variables"});
   }
-  // RPM más alto de la flota — no es un cambio %, es un ranking directo del período
+  // RPM más alto de la flota — compara el PICO MÁXIMO real de cada unidad (rpm_max de cada día),
+  // no un promedio de promedios diarios (que suaviza y esconde el pico real).
   let unidadMasRpm=null, mayorRpm=-Infinity;
   unidades.forEach(p=>{
-    const filas=filtrarPorPeriodo((DATA[p].diario||[]).map(f=>({fecha:f.fecha, rpm:num(f.rpm_prom)})));
-    const conDato=filas.filter(f=>f.rpm>0);
-    const prom = conDato.length ? conDato.reduce((a,f)=>a+f.rpm,0)/conDato.length : 0;
-    if(prom>mayorRpm){ mayorRpm=prom; unidadMasRpm={placa:p, rpm:prom}; }
+    const filas=filtrarPorPeriodo((DATA[p].diario||[]).map(f=>({fecha:f.fecha, rpmMax:num(f.rpm_max)})));
+    const pico = filas.length ? Math.max(...filas.map(f=>f.rpmMax)) : 0;
+    if(pico>mayorRpm){ mayorRpm=pico; unidadMasRpm={placa:p, rpm:pico}; }
   });
   if(unidadMasRpm && unidadMasRpm.rpm>0){
-    secciones.atencion.push({texto:`${unidadMasRpm.placa} tiene el RPM promedio más alto de la flota (${unidadMasRpm.rpm.toFixed(2)} rpm)`, color:"var(--warn)", cat:"motor", sub:"variables"});
+    secciones.atencion.push({texto:`${unidadMasRpm.placa} tuvo el pico de RPM más alto de la flota (${unidadMasRpm.rpm.toFixed(2)} rpm)`, color:"var(--warn)", cat:"motor", sub:"variables"});
   }
 
   // ===== 🟢 DESTACADOS — informativo, contexto útil =====
@@ -2450,21 +2451,21 @@ function renderResumenHome(){
 
   // ===== Dibuja las secciones (Atención se omite por completo si quedó vacía) =====
   const defs = [
-    {key:"seguridad", titulo:"🔴 Seguridad"},
-    {key:"atencion", titulo:"🟡 Atención"},
-    {key:"destacados", titulo:"🟢 Destacados"},
-    {key:"flota", titulo:"📈 Tu Flota"}
+    {key:"seguridad", titulo:"🔴 Seguridad", color:"var(--crit)"},
+    {key:"atencion", titulo:"🟡 Atención", color:"var(--warn)"},
+    {key:"destacados", titulo:"🟢 Destacados", color:"var(--ok)"},
+    {key:"flota", titulo:"📈 Tu Flota", color:"var(--accent)"}
   ];
-  defs.forEach(({key,titulo})=>{
+  defs.forEach(({key,titulo,color})=>{
     const hallazgos=secciones[key];
     if(hallazgos.length===0) return;
     const wrap=document.createElement("div"); wrap.className="resumen-seccion";
+    wrap.style.setProperty("--rs-color", color);
     const tit=document.createElement("div"); tit.className="resumen-seccion-titulo"; tit.textContent=titulo;
     wrap.appendChild(tit);
     hallazgos.forEach(h=>{
-      const item=document.createElement("div"); item.className="resumen-item";
-      item.style.setProperty("--rc-color", h.color);
-      item.innerHTML=`<span class="rc-dot"></span><div class="rc-frase" style="font-weight:600;color:var(--text-primary);">${h.texto}</div>`;
+      const item=document.createElement("div"); item.className="resumen-linea";
+      item.innerHTML=`<span class="resumen-linea-guion">—</span><span class="resumen-linea-texto">${h.texto}</span>`;
       item.addEventListener("click",()=>mostrarApp(h.cat, h.sub));
       wrap.appendChild(item);
     });
