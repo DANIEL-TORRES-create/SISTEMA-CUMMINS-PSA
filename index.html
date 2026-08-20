@@ -61,8 +61,9 @@ html, body { margin:0; padding:0; }
 #appRoot .theme-toggle .opt.active {background:var(--brand);color:#fff;}
 
   /* ===== TOP BAR ===== */
-#appRoot #screenApp {position:relative;display:none;flex-direction:column;z-index:300;}
-#appRoot #screenApp.show {display:flex;}
+#appRoot #screenApp {position:relative;display:none;z-index:300;}
+#appRoot #screenApp.show {display:block;}
+#appRoot .content-area {margin-left:180px;} /* el menú ahora es full-height a la izquierda; el resto del contenido empieza después de su ancho */
 #appRoot .topbar {
     display:flex; align-items:center; gap:20px; padding:12px 24px; border-bottom:1px solid var(--line);
     background:var(--bg-panel); flex-shrink:0; z-index:150;
@@ -92,16 +93,16 @@ html, body { margin:0; padding:0; }
 #appRoot .unit-switcher select {background:transparent;border:none;color:var(--text-primary);font-family:'IBM Plex Mono';font-weight:600;font-size:13px;cursor:pointer;outline:none;}
 #appRoot .unit-switcher select option {background:var(--bg-panel);color:var(--text-primary);}
 
-  /* ===== LAYOUT ===== */
-#appRoot .layout {display:grid;grid-template-columns:180px minmax(0,1fr);}
+  /* ===== MENÚ LATERAL — ahora full-height desde el tope de la pantalla, no depende de medir
+     el alto del encabezado (esa dependencia fue la raíz de todos los problemas de posición
+     anteriores). Incluye el botón "← Inicio" en su propio tope. ===== */
 #appRoot .sidenav {
     border-right:1px solid var(--line);padding:20px 0;background:var(--bg-panel);
-    /* position:fixed en vez de sticky: dentro de la cuadrícula (.layout) el sticky no se comportaba
-       bien en el entorno embebido de MyGeotab — fixed es más simple y predecible, se ancla directo
-       a la ventana visible sin depender del nivel de anidación. La columna de 180px del grid sigue
-       reservando el espacio para que el contenido de la derecha (.main) no se monte encima. */
-    position:fixed; top:64px; left:0; width:180px; height:calc(100vh - 64px); overflow-y:auto; z-index:500;
+    position:fixed; top:0; left:0; width:180px; height:100vh; overflow-y:auto; z-index:500;
   }
+#appRoot .sidenav-inicio {margin:0 22px 16px;padding:9px 14px;cursor:pointer;font-size:12px;font-weight:600;
+    background:var(--bg-raised);border:1px solid var(--line);border-radius:var(--radius);display:inline-block;}
+#appRoot .sidenav-inicio:hover {background:var(--accent-dim);border-color:var(--accent);}
 #appRoot .nav-item {display:flex;align-items:center;gap:12px;padding:13px 22px;color:var(--text-secondary);cursor:pointer;font-size:13px;font-weight:500;letter-spacing:.03em;border-left:2px solid transparent;transition:all .15s;}
 #appRoot .nav-item:hover {color:var(--text-primary);background:var(--bg-raised);}
 #appRoot .nav-item.active {color:var(--text-primary);border-left-color:var(--accent);background:var(--accent-dim);}
@@ -120,7 +121,7 @@ html, body { margin:0; padding:0; }
 #appRoot .subnav-item.disabled:hover {color:var(--text-dim);}
 #appRoot .soon {font-size:8px;color:var(--text-dim);border:1px solid var(--line);border-radius:3px;padding:1px 4px;margin-left:4px;letter-spacing:.03em;}
 
-#appRoot .main {padding:22px 26px 60px;min-height:0;grid-column:2;} /* padding-bottom extra: espacio para que el ticker fijo no tape el último cuadro */
+#appRoot .main {padding:22px 26px 60px;min-height:0;} /* padding-bottom extra: espacio para que el ticker fijo no tape el último cuadro */
 #appRoot .section-title {display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
 #appRoot .section-title h1 {font-size:19px;font-weight:600;}
 #appRoot .section-title .placa {font-family:'IBM Plex Mono';color:#fff;font-size:13px;background:#000000CC;border:1px solid var(--line-bright);padding:3px 10px;border-radius:4px;}
@@ -300,7 +301,7 @@ html, body { margin:0; padding:0; }
 #appRoot .home-split-flecha-texto {font-size:13px;font-weight:600;color:var(--text-secondary);line-height:1.5;}
 @keyframes flecha-pulso {0%,100%{transform:translateX(0);opacity:.6;} 50%{transform:translateX(6px);opacity:1;}}
 #appRoot .home-col-title {font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--line);}
-#appRoot .resumen-lista {display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}
+#appRoot .resumen-lista {display:flex;flex-direction:column;gap:18px;}
 #appRoot .resumen-seccion {background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:14px 18px;}
 #appRoot .resumen-seccion-titulo {display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-primary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
 #appRoot .resumen-seccion-letra {display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:var(--bg-raised);border:1px solid var(--line-bright);font-family:'IBM Plex Mono';font-weight:700;font-size:12px;color:var(--text-primary);flex-shrink:0;}
@@ -391,23 +392,8 @@ html, body { margin:0; padding:0; }
 
 <div id="screenApp">
   <div class="brand-bg" id="bgApp"></div>
-<div class="topbar">
-  <div class="dn-btn" id="btnVolverHome" style="margin-right:4px;cursor:pointer;">← Inicio</div>
-  <div class="brand-block">
-    <div class="brand-text">
-      <div class="name">CUMMINS: CLIENTE PSA</div>
-      <div class="sub">TELEMETRÍA DE FLOTA - CUMMINS NAVISAF</div>
-    </div>
-  </div>
-  <div class="unit-switcher"><span class="mono" style="font-size:11px;color:var(--text-dim);">UNIDAD</span><select id="unitSelect"></select></div>
-  <div class="topbar-stats">
-    <div class="stat-chip"><span class="val mono" id="statTotal">--</span><span class="lbl">Unidades</span></div>
-    <div class="stat-chip update"><span class="val mono" id="statUltimaActualizacion">--</span><span class="lbl">Última actualización</span></div>
-  </div>
-</div>
-
-<div class="layout">
-  <div class="sidenav">
+<div class="sidenav">
+    <div class="sidenav-inicio" id="btnVolverHome">← Inicio</div>
     <div class="nav-label">CATEGORÍAS</div>
 
     <div class="nav-item active" data-cat="motor"><span class="nav-icon-badge"><img class="nav-icon" src="https://daniel-torres-create.github.io/SISTEMA-CUMMINS-PSA/iconmotor.png" alt="Motor"></span> MOTOR</div>
@@ -429,7 +415,22 @@ html, body { margin:0; padding:0; }
       <div class="subnav-item disabled" data-cat="seguridad" data-sub="acelerometro">Acelerómetro <span class="soon">próx.</span></div>
       <div class="subnav-item disabled" data-cat="seguridad" data-sub="velocidad">Exceso de Velocidad <span class="soon">próx.</span></div>
     </div>
-  </div>
+  </div><!-- /sidenav -->
+
+  <div class="content-area">
+    <div class="topbar">
+      <div class="brand-block">
+        <div class="brand-text">
+          <div class="name">CUMMINS: CLIENTE PSA</div>
+          <div class="sub">TELEMETRÍA DE FLOTA - CUMMINS NAVISAF</div>
+        </div>
+      </div>
+      <div class="unit-switcher"><span class="mono" style="font-size:11px;color:var(--text-dim);">UNIDAD</span><select id="unitSelect"></select></div>
+      <div class="topbar-stats">
+        <div class="stat-chip"><span class="val mono" id="statTotal">--</span><span class="lbl">Unidades</span></div>
+        <div class="stat-chip update"><span class="val mono" id="statUltimaActualizacion">--</span><span class="lbl">Última actualización</span></div>
+      </div>
+    </div>
 
   <div class="main">
     <div class="section-title">
@@ -648,8 +649,8 @@ html, body { margin:0; padding:0; }
         <div class="compare-wrap" style="max-height:340px;overflow-y:auto;"><table class="compare-table" id="tablaFallas"></table></div>
       </div>
     </div>
-  </div>
-</div>
+  </div><!-- /main -->
+  </div><!-- /content-area -->
 
 <div class="ticker-wrap">
   <div class="ticker-label">◉ FALLAS RECIENTES</div>
@@ -1052,23 +1053,19 @@ function ajustarPosicionSidenav(){
   if(!screenApp || !screenApp.classList.contains("show")) return; // solo aplica con el dashboard visible
   const sidenav = document.querySelector("#appRoot .sidenav");
   const appRoot = document.getElementById("appRoot");
-  const topbar = document.querySelector("#appRoot .topbar");
   const ticker = document.querySelector("#appRoot .ticker-wrap");
   if(!sidenav || !appRoot) return;
   const rect = appRoot.getBoundingClientRect();
   sidenav.style.left = Math.max(rect.left, 0) + "px";
   sidenav.style.width = "180px";
-  const altoTopbar = topbar ? topbar.getBoundingClientRect().height : 64;
-  sidenav.style.top = altoTopbar + "px";
-  // El menú (ahora con z-index alto) debe DETENERSE antes de llegar al ticker fijo de abajo —
-  // si llega hasta el fondo de la pantalla, se cruza geométricamente con el ticker y lo tapa,
-  // sin importar qué z-index tenga cada uno. Se descuenta el alto real del ticker.
+  // El menú ahora es full-height desde el tope de la pantalla real (top:0) — ya NO depende de
+  // medir el alto del encabezado, que era la causa de todos los problemas de posición anteriores
+  // (el encabezado ahora vive DENTRO de .content-area, al costado del menú, no arriba de él).
+  sidenav.style.top = "0px";
+  // Solo se descuenta el alto del ticker fijo de abajo, para que el menú se detenga antes de
+  // llegar a él y nunca se crucen geométricamente, sin importar el z-index de cada uno.
   const altoTicker = ticker ? ticker.getBoundingClientRect().height : 0;
-  sidenav.style.height = `calc(100vh - ${altoTopbar}px - ${altoTicker}px)`;
-  // El encabezado (sticky) a veces queda un poco más angosto que el ancho real disponible
-  // (width:100% no siempre contempla el espacio real cuando hay un scrollbar de por medio) —
-  // se fuerza al ancho medido real para cerrar ese hueco.
-  if(topbar) topbar.style.width = rect.width + "px";
+  sidenav.style.height = `calc(100vh - ${altoTicker}px)`;
 }
 window.addEventListener("resize", ajustarPosicionSidenav);
 
