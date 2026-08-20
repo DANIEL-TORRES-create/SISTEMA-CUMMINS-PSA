@@ -13,7 +13,11 @@
 /* Reset de márgenes por defecto del navegador (body trae 8px de margen por defecto) —
    pueden sumar al desajuste de píxeles al calcular cuánto espacio real hay disponible. */
 html, body { margin:0; padding:0; }
-:root {
+/* Todas las variables se declaran dentro de #appRoot (no en :root global) para que nunca puedan
+   chocar con variables del mismo nombre que la página que nos contiene (MyGeotab) pudiera definir
+   a nivel global — eso era justo lo que dejaba "CATEGORÍAS" invisible: --text-dim de MyGeotab
+   ganándole a la nuestra, sin ser un problema de posición ni de z-index en absoluto. */
+#appRoot {
     /* ===== TEMA OSCURO (Home y dashboard, después del login) ===== */
     --bg-void:#232427; --bg-panel:#2C2D30; --bg-raised:#38393D;
     --line:#454649; --line-bright:#5A5B5F;
@@ -28,13 +32,11 @@ html, body { margin:0; padding:0; }
     --cat-motor:#5FACE0; --cat-operacion:#34C795; --cat-seguridad:#FFB020;
     /* ===== Colores únicos por variable de motor (ninguno se repite) ===== */
     --var-rpm:#5FACE0; --var-oil:#2DD9A0; --var-coolant:#FFB020; --var-carga:#A78BFA; --var-manifold:#22D3EE;
-  }
-#appRoot * {margin:0;padding:0;box-sizing:border-box;}
-#appRoot {
     background:var(--bg-void); color:var(--text-primary);
     font-family:'IBM Plex Sans',sans-serif; min-height:100vh; overflow-x:hidden;
     transition:background .25s,color .25s;
   }
+#appRoot * {margin:0;padding:0;box-sizing:border-box;}
 #appRoot .mono {font-family:'IBM Plex Mono',monospace;}
 
   /* ===== BOOT INTRO ===== */
@@ -298,8 +300,8 @@ html, body { margin:0; padding:0; }
 #appRoot .home-split-flecha-texto {font-size:13px;font-weight:600;color:var(--text-secondary);line-height:1.5;}
 @keyframes flecha-pulso {0%,100%{transform:translateX(0);opacity:.6;} 50%{transform:translateX(6px);opacity:1;}}
 #appRoot .home-col-title {font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--line);}
-#appRoot .resumen-lista {display:flex;flex-direction:column;}
-#appRoot .resumen-seccion {margin-bottom:36px;background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:14px 18px;}
+#appRoot .resumen-lista {display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}
+#appRoot .resumen-seccion {background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:14px 18px;}
 #appRoot .resumen-seccion-titulo {display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-primary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
 #appRoot .resumen-seccion-letra {display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:var(--bg-raised);border:1px solid var(--line-bright);font-family:'IBM Plex Mono';font-weight:700;font-size:12px;color:var(--text-primary);flex-shrink:0;}
 #appRoot .resumen-linea {display:flex;align-items:baseline;gap:8px;padding:6px 0;cursor:pointer;}
@@ -822,7 +824,10 @@ function tooltipConDatos(params, enterosPara, esDiario){
   return encabezado + lineas.join('<br>');
 }
 function resolveColor(v){
-  if(typeof v==="string" && v.startsWith("var(")) return getComputedStyle(document.documentElement).getPropertyValue(v.replace("var(","").replace(")","")).trim();
+  if(typeof v==="string" && v.startsWith("var(")){
+    const root = document.getElementById("appRoot") || document.documentElement;
+    return getComputedStyle(root).getPropertyValue(v.replace("var(","").replace(")","")).trim();
+  }
   return v;
 }
 
@@ -1310,14 +1315,14 @@ function render(){
 
 function crearGauge(elId,valor,min,max,colorVar,unidad){
   const el=document.getElementById(elId); if(!el) return;
-  const color=getComputedStyle(document.documentElement).getPropertyValue(colorVar.replace("var(","").replace(")","")).trim()||colorVar;
+  const color=getComputedStyle(document.getElementById("appRoot")||document.documentElement).getPropertyValue(colorVar.replace("var(","").replace(")","")).trim()||colorVar;
   const chart=echarts.getInstanceByDom(el)||echarts.init(el);
   chart.setOption({series:[{type:'gauge',min,max,radius:'92%',startAngle:210,endAngle:-30,
-    axisLine:{lineStyle:{width:6,color:[[1,getComputedStyle(document.documentElement).getPropertyValue('--bg-raised')||'#1D1D20']]}},
+    axisLine:{lineStyle:{width:6,color:[[1,getComputedStyle(document.getElementById("appRoot")||document.documentElement).getPropertyValue('--bg-raised')||'#1D1D20']]}},
     progress:{show:true,width:6,itemStyle:{color}}, pointer:{show:true,length:'55%',width:3,itemStyle:{color}},
     axisTick:{show:false},splitLine:{show:false},axisLabel:{show:false},
     anchor:{show:true,size:8,itemStyle:{color,borderWidth:0}},
-    detail:{valueAnimation:true,fontSize:18,fontFamily:'IBM Plex Mono',fontWeight:600,color:getComputedStyle(document.documentElement).getPropertyValue('--text-primary'),offsetCenter:[0,'68%'],formatter:v=>v.toFixed(1)+unidad},
+    detail:{valueAnimation:true,fontSize:18,fontFamily:'IBM Plex Mono',fontWeight:600,color:getComputedStyle(document.getElementById("appRoot")||document.documentElement).getPropertyValue('--text-primary'),offsetCenter:[0,'68%'],formatter:v=>v.toFixed(1)+unidad},
     data:[{value:valor}]}]});
 }
 
