@@ -10,6 +10,9 @@
 </head>
 <body>
 <style>
+/* Reset de márgenes por defecto del navegador (body trae 8px de margen por defecto) —
+   pueden sumar al desajuste de píxeles al calcular cuánto espacio real hay disponible. */
+html, body { margin:0; padding:0; }
 :root {
     /* ===== TEMA OSCURO (Home y dashboard, después del login) ===== */
     --bg-void:#232427; --bg-panel:#2C2D30; --bg-raised:#38393D;
@@ -89,7 +92,11 @@
 #appRoot .layout {display:grid;grid-template-columns:180px minmax(0,1fr);}
 #appRoot .sidenav {
     border-right:1px solid var(--line);padding:20px 0;background:var(--bg-panel);
-    position:sticky; top:64px;
+    /* position:fixed en vez de sticky: dentro de la cuadrícula (.layout) el sticky no se comportaba
+       bien en el entorno embebido de MyGeotab — fixed es más simple y predecible, se ancla directo
+       a la ventana visible sin depender del nivel de anidación. La columna de 180px del grid sigue
+       reservando el espacio para que el contenido de la derecha (.main) no se monte encima. */
+    position:fixed; top:64px; left:0; width:180px; height:calc(100vh - 64px); overflow-y:auto; z-index:140;
   }
 #appRoot .nav-item {display:flex;align-items:center;gap:12px;padding:13px 22px;color:var(--text-secondary);cursor:pointer;font-size:13px;font-weight:500;letter-spacing:.03em;border-left:2px solid transparent;transition:all .15s;}
 #appRoot .nav-item:hover {color:var(--text-primary);background:var(--bg-raised);}
@@ -109,7 +116,7 @@
 #appRoot .subnav-item.disabled:hover {color:var(--text-dim);}
 #appRoot .soon {font-size:8px;color:var(--text-dim);border:1px solid var(--line);border-radius:3px;padding:1px 4px;margin-left:4px;letter-spacing:.03em;}
 
-#appRoot .main {padding:22px 26px 30px;min-height:0;}
+#appRoot .main {padding:22px 26px 30px;min-height:0;grid-column:2;}
 #appRoot .section-title {display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
 #appRoot .section-title h1 {font-size:19px;font-weight:600;}
 #appRoot .section-title .placa {font-family:'IBM Plex Mono';color:#fff;font-size:13px;background:#000000CC;border:1px solid var(--line-bright);padding:3px 10px;border-radius:4px;}
@@ -769,6 +776,18 @@ const COLORS={ok:"#2DD9A0",warn:"#FFB020",crit:"#FF3B3B",brand:"#CC0000",accent:
 const LABEL_TOP = {show:true, position:'top', color:'#E8E8EA', fontSize:10, fontFamily:"'IBM Plex Mono'", fontWeight:600};
 const LABEL_INSIDE = {show:true, position:'inside', color:'#181818', fontSize:9, fontFamily:"'IBM Plex Mono'", fontWeight:600, formatter:p=>p.value>=1?p.value:''}; // para barras apiladas (Uso de Flota) — segmentos muy chicos (<1h) esconden el número en vez de amontonarlo
 const LABEL_TOP_OSCURO = {show:true, position:'top', color:'#181818', fontSize:10, fontFamily:"'IBM Plex Mono'", fontWeight:700}; // para series de color CLARO (ej. amarillo de Encendidos) donde el texto blanco no contrasta bien
+
+// Tooltip completo al pasar el cursor: día + nombre de cada serie + su valor (no solo el día).
+// "enterosPara": lista de nombres de serie que deben mostrarse como número entero (ej. Encendidos, cantidad de fallas).
+function tooltipConDatos(params, enterosPara){
+  enterosPara = enterosPara || [];
+  const encabezado = `<div style="font-weight:600;margin-bottom:4px;">${params[0].axisValue}</div>`;
+  const lineas = params.map(p=>{
+    const val = enterosPara.includes(p.seriesName) ? Math.round(p.value) : Number(p.value).toFixed(2);
+    return p.seriesName ? `${p.marker}${p.seriesName}: <b>${val}</b>` : `${p.marker}<b>${val}</b>`;
+  });
+  return encabezado + lineas.join('<br>');
+}
 function resolveColor(v){
   if(typeof v==="string" && v.startsWith("var(")) return getComputedStyle(document.documentElement).getPropertyValue(v.replace("var(","").replace(")","")).trim();
   return v;
@@ -789,6 +808,11 @@ function mostrarVideoIntro(){
   const video=document.getElementById("videoIntro");
   video.muted=true; video.currentTime=0; // silenciado por defecto: ningún navegador permite audio sin un clic previo
   video.play().catch(()=>{});
+  // Misma pantalla de "toma completa" que Home/Login — mismo resguardo: fijar overflow-x y
+  // overflow-y explícitamente los DOS, para que nunca queden mezclados (ver mostrarHome()).
+  const root=document.getElementById("appRoot");
+  if(root){ root.style.height="100vh"; root.style.minHeight=""; root.style.overflowY="auto"; root.style.overflowX="hidden"; }
+  ajustarAltoAppRoot();
 }
 function mostrarHome(){
   document.getElementById("screenVideoIntro").style.display="none";
@@ -1371,7 +1395,7 @@ function renderMotorVariables(){
   trend.setOption({
     grid:{left:44,right:20,top:multiple?34:16,bottom:34},
     legend: multiple ? {top:0,textStyle:{color:'#A8A8AC',fontSize:10}} : undefined,
-    tooltip:{trigger:'axis',backgroundColor:'var(--bg-panel)',borderColor:'var(--line)',textStyle:{color:'#E8E8EA',fontSize:11},formatter:p=>p[0].axisValue},
+    tooltip:{trigger:'axis',backgroundColor:'var(--bg-panel)',borderColor:'var(--line)',textStyle:{color:'#E8E8EA',fontSize:11},formatter:p=>tooltipConDatos(p)},
     dataZoom:dataZoomConfig(fechas.length),
     // Con varias variables a la vez, sus etiquetas de valor pueden pisarse entre sí — esto las
     // corre automáticamente para que no se amontonen ni se vuelvan ilegibles.
@@ -1522,7 +1546,7 @@ function renderConsumoMotor(){
     const dias = filtrarPorPeriodo(getEcmDiasSerie());
     const fechas = dias.map(f=>f.fecha.split("/")[0]);
     chart.setOption({grid:{left:45,right:50,top:30,bottom:34}, labelLayout:{moveOverlap:'shiftY'},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p)}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'gal',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1534,7 +1558,7 @@ function renderConsumoMotor(){
   } else if(consumoVista==="mensual"){
     const porMes=agruparPorMes(getDiarioSerieCompleta(),["galones","horasMotor","km"]);
     chart.setOption({grid:{left:45,right:50,top:30,bottom:50}, labelLayout:{moveOverlap:'shiftY'},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p)}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:[{type:'value',name:'gal',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:unidadEje,axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
@@ -1545,7 +1569,7 @@ function renderConsumoMotor(){
   } else {
     const porUnidad=porUnidadTotales(["galones","horasMotor","km"]);
     chart.setOption({grid:{left:60,right:50,top:30,bottom:34}, labelLayout:{moveOverlap:'shiftY'},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p)}, legend:{data:['Galones',nombreSerie],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(porUnidad.length),
       xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'gal',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1649,36 +1673,36 @@ function renderEncendidos(){
     const diasPeriodo=filtrarPorPeriodo(getDiarioSerieCompleta());
     const fechas=diasPeriodo.map(f=>f.fecha.split("/")[0]);
     chart.setOption({grid:{left:45,right:50,top:30,bottom:34}, labelLayout:{moveOverlap:'shiftY'},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p,['Encendidos'])}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'#',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Encendidos',type:'bar',data:diasPeriodo.map(f=>Math.round(f.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP_OSCURO},
+        {name:'Encendidos',type:'bar',data:diasPeriodo.map(f=>Math.round(f.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP},
         {name:'Horas motor',type:'line',yAxisIndex:1,data:diasPeriodo.map(f=>r2(f.horasMotor)),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2},label:LABEL_TOP}
       ]},true);
   } else if(encendidosVista==="mensual"){
     const porMes=agruparPorMes(getDiarioSerieCompleta(),["encendidos","horasMotor"]);
     chart.setOption({grid:{left:45,right:50,top:30,bottom:50}, labelLayout:{moveOverlap:'shiftY'},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p,['Encendidos'])}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:[{type:'value',name:'#',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Encendidos',type:'bar',data:porMes.map(m=>Math.round(m.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP_OSCURO},
+        {name:'Encendidos',type:'bar',data:porMes.map(m=>Math.round(m.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP},
         {name:'Horas motor',type:'line',yAxisIndex:1,data:porMes.map(m=>r2(m.horasMotor)),itemStyle:{color:COLORS.ok},symbol:'circle',symbolSize:5,lineStyle:{width:2},label:LABEL_TOP}
       ]},true);
   } else {
     const porUnidad=porUnidadTotales(["encendidos","horasMotor"]);
     chart.setOption({grid:{left:60,right:50,top:30,bottom:34}, labelLayout:{moveOverlap:'shiftY'},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p,['Encendidos'])}, legend:{data:['Encendidos','Horas motor'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(porUnidad.length),
       xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:[{type:'value',name:'#',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
              {type:'value',name:'h',axisLine:{show:false},splitLine:{show:false},axisLabel:{color:'#A8A8AC',fontSize:10}}],
       series:[
-        {name:'Encendidos',type:'bar',data:porUnidad.map(u=>Math.round(u.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP_OSCURO},
+        {name:'Encendidos',type:'bar',data:porUnidad.map(u=>Math.round(u.encendidos)),itemStyle:{color:COLORS.warn},label:LABEL_TOP},
         {name:'Horas motor',type:'bar',yAxisIndex:1,data:porUnidad.map(u=>r2(u.horasMotor)),itemStyle:{color:COLORS.ok},label:LABEL_TOP}
       ]},true);
   }
@@ -1769,7 +1793,7 @@ function renderRendimientos(){
     const fechas = dias.map(f=>f.fecha.split("/")[0]);
     const rendimientoDia = dias.map(f=> limpiarValorAbsurdo(r2(calcularRendimiento(f.galones, f.horasMotor, f.km))));
     trend.setOption({grid:{left:50,right:20,top:16,bottom:34},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue},
+      tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;margin-bottom:4px;">${p[0].axisValue}</div>${p[0].marker}${Number(p[0].value).toFixed(2)} ${etiquetaRendimiento()}`},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',name:etiquetaRendimiento(),axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1778,14 +1802,14 @@ function renderRendimientos(){
     const porMes=agruparPorMes(getDiarioSerieCompleta(),["galones","horasMotor","km"]);
     const valores=porMes.map(m=>r2(calcularRendimiento(m.galones, m.horasMotor, m.km)));
     trend.setOption({grid:{left:50,right:20,top:16,bottom:50},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue},
+      tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;margin-bottom:4px;">${p[0].axisValue}</div>${p[0].marker}${Number(p[0].value).toFixed(2)} ${etiquetaRendimiento()}`},
       xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:{type:'value',name:etiquetaRendimiento(),axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
       series:[{type:'line',data:valores,smooth:true,itemStyle:{color:colorMetrica},areaStyle:{color:colorMetrica+'22'},symbol:'circle',symbolSize:5,lineStyle:{width:2},label:LABEL_TOP}]},true);
   } else {
     const porUnidad=porUnidadTotales(["galones","horasMotor","km"]).map(u=>({placa:u.placa, valor:r2(calcularRendimiento(u.galones,u.horasMotor,u.km))}));
     trend.setOption({grid:{left:50,right:20,top:16,bottom:34},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue},
+      tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;margin-bottom:4px;">${p[0].axisValue}</div>${p[0].marker}${Number(p[0].value).toFixed(2)} ${etiquetaRendimiento()}`},
       dataZoom:dataZoomConfig(porUnidad.length),
       xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',name:etiquetaRendimiento(),axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1891,7 +1915,7 @@ function renderUsoFlota(){
   if(usoFlotaVista==="diario"){
     const fechas=dias.map(f=>f.fecha.split("/")[0]);
     barChart.setOption({grid:{left:45,right:20,top:30,bottom:34}, labelLayout:{hideOverlap:true},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p)}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       dataZoom:dataZoomConfig(fechas.length),
       xAxis:{type:'category',data:fechas,axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',name:'h',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
@@ -1903,7 +1927,7 @@ function renderUsoFlota(){
   } else {
     const porMes=agruparPorMes(getUsoFlotaSerieCompleta(),["horasConduccion","horasRalenti","tiempoMuerto"]);
     barChart.setOption({grid:{left:45,right:20,top:30,bottom:50}, labelLayout:{hideOverlap:true},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
+      tooltip:{trigger:'axis',formatter:p=>tooltipConDatos(p)}, legend:{data:['Conducción','Ralentí','Detenido'],textStyle:{color:'#A8A8AC',fontSize:10},top:0},
       xAxis:{type:'category',data:porMes.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:{type:'value',name:'h',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
       series:[
@@ -2073,11 +2097,11 @@ function renderSeguridad(){
     fallasFiltradasPeriodo.forEach(f=>{ porDia[f.fecha]=(porDia[f.fecha]||0)+(f.cantidad||1); });
     const fechasOrdenadas=Object.keys(porDia).sort((a,b)=>parseFechaDDMMYYYY(a)-parseFechaDDMMYYYY(b));
     chart.setOption({grid:{left:40,right:20,top:16,bottom:34},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue},
+      tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;margin-bottom:4px;">${p[0].axisValue}</div>${p[0].marker}${Math.round(Number(p[0].value))} falla(s)`},
       dataZoom:dataZoomConfig(fechasOrdenadas.length),
       xAxis:{type:'category',data:fechasOrdenadas.map(f=>f.split("/")[0]),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
-      series:[{type:'bar',data:fechasOrdenadas.map(f=>porDia[f]),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:sevFiltroChartActual==="advertencia"?LABEL_TOP_OSCURO:LABEL_TOP}]},true);
+      series:[{type:'bar',data:fechasOrdenadas.map(f=>porDia[f]),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:LABEL_TOP}]},true);
   } else if(fallasVista==="mensual"){
     const porMes={};
     fallasFiltroSev.forEach(f=>{
@@ -2087,21 +2111,21 @@ function renderSeguridad(){
     });
     const meses=Object.values(porMes).sort((a,b)=>a.orden-b.orden);
     chart.setOption({grid:{left:40,right:20,top:16,bottom:50},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue},
+      tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;margin-bottom:4px;">${p[0].axisValue}</div>${p[0].marker}${Math.round(Number(p[0].value))} falla(s)`},
       xAxis:{type:'category',data:meses.map(m=>m.label),axisLabel:{color:'#A8A8AC',fontSize:10,rotate:20}},
       yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
-      series:[{type:'bar',data:meses.map(m=>m.cantidad),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:sevFiltroChartActual==="advertencia"?LABEL_TOP_OSCURO:LABEL_TOP}]},true);
+      series:[{type:'bar',data:meses.map(m=>m.cantidad),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:LABEL_TOP}]},true);
   } else {
     const porUnidad=Object.keys(DATA).map(p=>{
       const fallasU = sevFiltroChartActual==="todas" ? (DATA[p].fallas||[]) : (DATA[p].fallas||[]).filter(f=>clasificarSeveridadFMI(f.codigo_falla)===sevFiltroChartActual);
       return {placa:p, cantidad: fallasU.reduce((a,f)=>a+(f.cantidad||1),0)};
     });
     chart.setOption({grid:{left:40,right:20,top:16,bottom:34},
-      tooltip:{trigger:'axis',formatter:p=>p[0].axisValue},
+      tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;margin-bottom:4px;">${p[0].axisValue}</div>${p[0].marker}${Math.round(Number(p[0].value))} falla(s)`},
       dataZoom:dataZoomConfig(porUnidad.length),
       xAxis:{type:'category',data:porUnidad.map(u=>u.placa),axisLabel:{color:'#A8A8AC',fontSize:10}},
       yAxis:{type:'value',axisLine:{show:false},splitLine:{lineStyle:{color:'#FFFFFF14'}},axisLabel:{color:'#A8A8AC',fontSize:10}},
-      series:[{type:'bar',data:porUnidad.map(u=>u.cantidad),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:sevFiltroChartActual==="advertencia"?LABEL_TOP_OSCURO:LABEL_TOP}]},true);
+      series:[{type:'bar',data:porUnidad.map(u=>u.cantidad),itemStyle:{color:sevFiltroChartActual==="todas"?COLORS.accent:resolveColor(SEVERIDAD_COLOR[sevFiltroChartActual])},label:LABEL_TOP}]},true);
   }
 
   document.getElementById("tablaFallas").innerHTML=`<tr><th>Fecha</th><th>Diagnóstico</th><th>Controlador</th><th>SPN</th><th>FMI</th><th style="text-align:right;">Cantidad</th></tr>`+
@@ -2239,19 +2263,37 @@ function renderResumenHome(){
     frase: criticasTrim.actual>0 ? `${criticasTrim.actual} falla(s) crítica(s) en el trimestre` : `Sin fallas críticas — ${advertenciasTrim.actual} advertencia(s) registradas`,
     cat:"seguridad", sub:"fallas"});
 
-  // 5. Variables de Motor (refrigerante)
-  const coolTrim=compararTrimestre(f=>num(f.temperatura_prom)>0?num(f.temperatura_prom):0);
-  let diasConDatoCool=0;
-  Object.values(DATA).forEach(u=>{ (u.diario||[]).forEach(f=>{ const d=parseFechaDDMMYYYY(f.fecha); if(meses.some(mv=>mv.anio===d.getFullYear()&&mv.mes===d.getMonth()) && num(f.temperatura_prom)>0) diasConDatoCool++; }); });
-  const coolProm = diasConDatoCool>0 ? coolTrim.actual/diasConDatoCool : 0;
-  let unidadMasCaliente=null, mayorCambioCool=-Infinity;
-  Object.keys(DATA).forEach(p=>{
-    const c=compararMesAnteriorUnidad(p, f=>num(f.temperatura_prom));
-    if(c.cambioPorc>mayorCambioCool && c.actual>0){ mayorCambioCool=c.cambioPorc; unidadMasCaliente={placa:p, cambio:c.cambioPorc}; }
+  // 5. Comportamiento del Motor — considera las 5 variables (RPM, Aceite, Refrigerante, Carga, Admisión),
+  // no solo refrigerante. Elige como protagonista la que tenga el mayor cambio % (la más "movida" del trimestre).
+  const VARIABLES_HOME_MOTOR = [
+    {campo:"rpm_prom", label:"RPM", sufijo:""},
+    {campo:"aceite_prom", label:"presión de aceite", sufijo:" PSI"},
+    {campo:"temperatura_prom", label:"refrigerante", sufijo:"°C"},
+    {campo:"carga_prom", label:"carga de motor", sufijo:"%"},
+    {campo:"admision_prom", label:"presión de admisión", sufijo:" PSI"}
+  ];
+  let motorProtagonista=null, motorMayorCambio=-Infinity;
+  VARIABLES_HOME_MOTOR.forEach(v=>{
+    const trimV=compararTrimestre(f=>num(f[v.campo])>0?num(f[v.campo]):0);
+    let dias=0;
+    Object.values(DATA).forEach(u=>{ (u.diario||[]).forEach(f=>{ const d=parseFechaDDMMYYYY(f.fecha); if(meses.some(mv=>mv.anio===d.getFullYear()&&mv.mes===d.getMonth()) && num(f[v.campo])>0) dias++; }); });
+    const prom = dias>0 ? trimV.actual/dias : 0;
+    if(prom<=0) return;
+    let unidadGanadora=null, mayorCambio=-Infinity;
+    Object.keys(DATA).forEach(p=>{
+      const c=compararMesAnteriorUnidad(p, f=>num(f[v.campo]));
+      if(Math.abs(c.cambioPorc)>Math.abs(mayorCambio) && c.actual>0){ mayorCambio=c.cambioPorc; unidadGanadora={placa:p, cambio:c.cambioPorc}; }
+    });
+    if(Math.abs(mayorCambio)>Math.abs(motorMayorCambio)){
+      motorMayorCambio=mayorCambio;
+      motorProtagonista={campo:v.campo, label:v.label, sufijo:v.sufijo, prom, unidadGanadora};
+    }
   });
-  tarjetas.push({color:"var(--accent)", label:"Comportamiento del Motor (últimos 3 meses)", valor:coolProm.toFixed(2)+"°C refrigerante",
+  tarjetas.push({color:"var(--accent)", label:"Comportamiento del Motor (últimos 3 meses)",
+    valor: motorProtagonista ? motorProtagonista.prom.toFixed(2)+motorProtagonista.sufijo+" "+motorProtagonista.label : "Sin datos suficientes",
     cambio:0, sentido:"neutral",
-    frase: unidadMasCaliente && unidadMasCaliente.cambio>0 ? `${unidadMasCaliente.placa} corre ${unidadMasCaliente.cambio.toFixed(2)}% más caliente que antes` : "Temperaturas estables en el trimestre",
+    frase: motorProtagonista && motorProtagonista.unidadGanadora ?
+      `${motorProtagonista.unidadGanadora.placa} cambió ${Math.abs(motorProtagonista.unidadGanadora.cambio).toFixed(2)}% en ${motorProtagonista.label} vs. el mes anterior` : "Variables de motor estables en el trimestre",
     cat:"motor", sub:"variables"});
 
   tarjetas.forEach(t=>{
