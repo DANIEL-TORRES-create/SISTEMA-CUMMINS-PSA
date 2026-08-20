@@ -861,7 +861,7 @@ function mostrarApp(cat, sub){
     document.getElementById("tituloTrendOperacion").textContent = subvistaActual==="uso_flota" ? "Horas motor acumuladas" : "Rendimiento diario (gal/hora)";
     document.getElementById("tituloKpiOperacion").textContent = subvistaActual==="uso_flota" ? "Productividad del período" : "Resumen de horas y distancia";
   }
-  requestAnimationFrame(()=>{ render(); setTimeout(resizeAllCharts,60); });
+  requestAnimationFrame(()=>{ render(); ajustarPosicionSidenav(); setTimeout(()=>{ ajustarPosicionSidenav(); resizeAllCharts(); },60); });
 }
 function resizeAllCharts(){
   document.querySelectorAll('[id^="g_"],#trendMotor,#trendOperacion,#trendGalones,#trendEncendidos').forEach(el=>{ const i=echarts.getInstanceByDom(el); if(i) i.resize(); });
@@ -1012,6 +1012,23 @@ function ajustarAltoAppRoot(){
   root.style.overflowY = "auto";
 }
 window.addEventListener("resize", ajustarAltoAppRoot);
+
+// El menú lateral usa position:fixed (más predecible que sticky dentro de un grid), pero "fixed"
+// se ancla a la PÁGINA REAL completa, no a nuestro contenedor — y como la app corre embebida
+// directo dentro de la página de MyGeotab (no en un iframe aislado), un "left:0" fijo lo ponía
+// debajo del menú nativo de MyGeotab, invisible. Esto mide dónde empieza #appRoot en la pantalla
+// real y posiciona el menú exactamente ahí, cada vez que la página se redimensiona.
+function ajustarPosicionSidenav(){
+  const screenApp = document.getElementById("screenApp");
+  if(!screenApp || !screenApp.classList.contains("show")) return; // solo aplica con el dashboard visible
+  const sidenav = document.querySelector("#appRoot .sidenav");
+  const appRoot = document.getElementById("appRoot");
+  if(!sidenav || !appRoot) return;
+  const rect = appRoot.getBoundingClientRect();
+  sidenav.style.left = Math.max(rect.left, 0) + "px";
+  sidenav.style.width = "180px";
+}
+window.addEventListener("resize", ajustarPosicionSidenav);
 
 function init(){
   ajustarAltoAppRoot();
