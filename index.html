@@ -81,7 +81,7 @@ html, body { margin:0; padding:0; }
 #appRoot .stat-chip .lbl {font-size:10px;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;}
 #appRoot .stat-chip.alert .val {color:var(--brand);}
 #appRoot .stat-chip.update {align-items:center;justify-content:center;border-left:1px solid var(--line);padding-left:20px;}
-#appRoot .stat-chip.update .val {font-size:20px;}
+#appRoot .stat-chip.update .val {font-size:14px;}
 #appRoot .stat-chip.update .lbl {font-size:11px;}
 #appRoot .unit-switcher {
     background:var(--bg-raised); border:1px solid var(--line); border-radius:var(--radius);
@@ -98,7 +98,7 @@ html, body { margin:0; padding:0; }
        bien en el entorno embebido de MyGeotab — fixed es más simple y predecible, se ancla directo
        a la ventana visible sin depender del nivel de anidación. La columna de 180px del grid sigue
        reservando el espacio para que el contenido de la derecha (.main) no se monte encima. */
-    position:fixed; top:64px; left:0; width:180px; height:calc(100vh - 64px); overflow-y:auto; z-index:9999;
+    position:fixed; top:64px; left:0; width:180px; height:calc(100vh - 64px); overflow-y:auto; z-index:500;
   }
 #appRoot .nav-item {display:flex;align-items:center;gap:12px;padding:13px 22px;color:var(--text-secondary);cursor:pointer;font-size:13px;font-weight:500;letter-spacing:.03em;border-left:2px solid transparent;transition:all .15s;}
 #appRoot .nav-item:hover {color:var(--text-primary);background:var(--bg-raised);}
@@ -292,10 +292,10 @@ html, body { margin:0; padding:0; }
 #appRoot .btn-spinner {display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid #0A193044;border-top-color:#0A1930;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
 
   /* ===== HOME: TARJETAS DE RESUMEN (basadas en los últimos 3 meses) ===== */
-#appRoot .home-split {display:grid;grid-template-columns:minmax(0,1fr) 90px minmax(0,1fr);gap:12px;align-items:start;}
+#appRoot .home-split {display:grid;grid-template-columns:minmax(0,1fr) 140px minmax(0,1fr);gap:32px;align-items:start;}
 #appRoot .home-split-flecha {display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:60px;text-align:center;}
-#appRoot .home-split-flecha-icono {font-size:28px;color:var(--accent);margin-bottom:8px;animation:flecha-pulso 1.8s ease-in-out infinite;}
-#appRoot .home-split-flecha-texto {font-size:10px;color:var(--text-dim);line-height:1.4;}
+#appRoot .home-split-flecha-icono {font-size:52px;color:var(--accent);margin-bottom:12px;animation:flecha-pulso 1.8s ease-in-out infinite;}
+#appRoot .home-split-flecha-texto {font-size:13px;font-weight:600;color:var(--text-secondary);line-height:1.5;}
 @keyframes flecha-pulso {0%,100%{transform:translateX(0);opacity:.6;} 50%{transform:translateX(6px);opacity:1;}}
 #appRoot .home-col-title {font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--line);}
 #appRoot .resumen-lista {display:flex;flex-direction:column;}
@@ -1048,17 +1048,18 @@ function ajustarPosicionSidenav(){
   const sidenav = document.querySelector("#appRoot .sidenav");
   const appRoot = document.getElementById("appRoot");
   const topbar = document.querySelector("#appRoot .topbar");
+  const ticker = document.querySelector("#appRoot .ticker-wrap");
   if(!sidenav || !appRoot) return;
   const rect = appRoot.getBoundingClientRect();
   sidenav.style.left = Math.max(rect.left, 0) + "px";
   sidenav.style.width = "180px";
-  // El menú asumía 64px fijos de alto de encabezado ("top:64px") — si dentro de MyGeotab el
-  // encabezado real mide un poco más (por fuentes/zoom propios de su entorno), el menú se
-  // dibujaba encima de él, tapando el texto "CATEGORÍAS". Se mide el alto real y se le suma
-  // un margen extra de seguridad, ya que dentro de MyGeotab sigue quedando un poco corto.
   const altoTopbar = topbar ? topbar.getBoundingClientRect().height : 64;
   sidenav.style.top = altoTopbar + "px";
-  sidenav.style.height = `calc(100vh - ${altoTopbar}px)`;
+  // El menú (ahora con z-index alto) debe DETENERSE antes de llegar al ticker fijo de abajo —
+  // si llega hasta el fondo de la pantalla, se cruza geométricamente con el ticker y lo tapa,
+  // sin importar qué z-index tenga cada uno. Se descuenta el alto real del ticker.
+  const altoTicker = ticker ? ticker.getBoundingClientRect().height : 0;
+  sidenav.style.height = `calc(100vh - ${altoTopbar}px - ${altoTicker}px)`;
   // El encabezado (sticky) a veces queda un poco más angosto que el ancho real disponible
   // (width:100% no siempre contempla el espacio real cuando hay un scrollbar de por medio) —
   // se fuerza al ancho medido real para cerrar ese hueco.
