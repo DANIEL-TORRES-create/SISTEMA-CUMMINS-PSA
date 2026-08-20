@@ -290,11 +290,16 @@ html, body { margin:0; padding:0; }
 #appRoot .btn-spinner {display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid #0A193044;border-top-color:#0A1930;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
 
   /* ===== HOME: TARJETAS DE RESUMEN (basadas en los últimos 3 meses) ===== */
-#appRoot .home-split {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start;}
+#appRoot .home-split {display:grid;grid-template-columns:minmax(0,1fr) 90px minmax(0,1fr);gap:12px;align-items:start;}
+#appRoot .home-split-flecha {display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:60px;text-align:center;}
+#appRoot .home-split-flecha-icono {font-size:28px;color:var(--accent);margin-bottom:8px;animation:flecha-pulso 1.8s ease-in-out infinite;}
+#appRoot .home-split-flecha-texto {font-size:10px;color:var(--text-dim);line-height:1.4;}
+@keyframes flecha-pulso {0%,100%{transform:translateX(0);opacity:.6;} 50%{transform:translateX(6px);opacity:1;}}
 #appRoot .home-col-title {font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--line);}
 #appRoot .resumen-lista {display:flex;flex-direction:column;}
-#appRoot .resumen-seccion {margin-bottom:14px;background:var(--bg-panel);border:1px solid var(--line);border-left:4px solid var(--rs-color, var(--accent));border-radius:8px;padding:14px 18px;}
-#appRoot .resumen-seccion-titulo {font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-primary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+#appRoot .resumen-seccion {margin-bottom:24px;background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:14px 18px;}
+#appRoot .resumen-seccion-titulo {display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-primary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+#appRoot .resumen-seccion-letra {display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:var(--bg-raised);border:1px solid var(--line-bright);font-family:'IBM Plex Mono';font-weight:700;font-size:12px;color:var(--text-primary);flex-shrink:0;}
 #appRoot .resumen-linea {display:flex;align-items:baseline;gap:8px;padding:6px 0;cursor:pointer;}
 #appRoot .resumen-linea:hover .resumen-linea-texto {color:var(--text-primary);}
 #appRoot .resumen-linea-guion {color:var(--text-dim);flex-shrink:0;}
@@ -366,6 +371,10 @@ html, body { margin:0; padding:0; }
       <div class="home-col-resumen">
         <div class="home-col-title">📡 Resumen de Flota — Últimos 3 Meses</div>
         <div class="resumen-lista" id="resumenGrid"></div>
+      </div>
+      <div class="home-split-flecha" aria-hidden="true">
+        <div class="home-split-flecha-icono">→</div>
+        <div class="home-split-flecha-texto">Selecciona un módulo<br>para ver el detalle</div>
       </div>
       <div class="home-col-explorar">
         <div class="home-col-title">Explorar por Categoría</div>
@@ -873,7 +882,14 @@ function mostrarApp(cat, sub){
     document.getElementById("tituloTrendOperacion").textContent = subvistaActual==="uso_flota" ? "Horas motor acumuladas" : "Rendimiento diario (gal/hora)";
     document.getElementById("tituloKpiOperacion").textContent = subvistaActual==="uso_flota" ? "Productividad del período" : "Resumen de horas y distancia";
   }
-  requestAnimationFrame(()=>{ render(); ajustarPosicionSidenav(); ajustarPosicionTicker(); setTimeout(()=>{ ajustarPosicionSidenav(); ajustarPosicionTicker(); resizeAllCharts(); },60); });
+  requestAnimationFrame(()=>{
+    render(); ajustarPosicionSidenav(); ajustarPosicionTicker();
+    // Se vuelve a medir varias veces mientras la página (dentro o fuera de MyGeotab) termina de
+    // acomodar su propio layout — en vez de sumar un margen fijo a ciegas (que solo sirve para
+    // un entorno y rompe el otro), cada reintento usa la medición REAL más reciente disponible.
+    [60,200,500,1000].forEach(ms=> setTimeout(()=>{ ajustarPosicionSidenav(); ajustarPosicionTicker(); },ms));
+    setTimeout(resizeAllCharts,60);
+  });
 }
 function resizeAllCharts(){
   document.querySelectorAll('[id^="g_"],#trendMotor,#trendOperacion,#trendGalones,#trendEncendidos').forEach(el=>{ const i=echarts.getInstanceByDom(el); if(i) i.resize(); });
@@ -1038,7 +1054,7 @@ function ajustarPosicionSidenav(){
   // encabezado real mide un poco más (por fuentes/zoom propios de su entorno), el menú se
   // dibujaba encima de él, tapando el texto "CATEGORÍAS". Se mide el alto real y se le suma
   // un margen extra de seguridad, ya que dentro de MyGeotab sigue quedando un poco corto.
-  const altoTopbar = (topbar ? topbar.getBoundingClientRect().height : 64) + 16;
+  const altoTopbar = topbar ? topbar.getBoundingClientRect().height : 64;
   sidenav.style.top = altoTopbar + "px";
   sidenav.style.height = `calc(100vh - ${altoTopbar}px)`;
   // El encabezado (sticky) a veces queda un poco más angosto que el ancho real disponible
@@ -2410,6 +2426,24 @@ function renderResumenHome(){
   if(unidadMasRpm && unidadMasRpm.rpm>0){
     secciones.atencion.push({texto:`${unidadMasRpm.placa} tuvo el pico de RPM más alto de la flota (${unidadMasRpm.rpm.toFixed(2)} rpm)`, color:"var(--warn)", cat:"motor", sub:"variables"});
   }
+  // Misma lógica que RPM: pico máximo real (temperatura_max / carga_max de cada día), no promedio ni % de cambio
+  function unidadPicoMax(campo){
+    let ganador=null, mayor=-Infinity;
+    unidades.forEach(p=>{
+      const filas=filtrarPorPeriodo((DATA[p].diario||[]).map(f=>({fecha:f.fecha, valor:num(f[campo])})));
+      const pico = filas.length ? Math.max(...filas.map(f=>f.valor)) : 0;
+      if(pico>mayor){ mayor=pico; ganador={placa:p, valor:pico}; }
+    });
+    return ganador && ganador.valor>0 ? ganador : null;
+  }
+  const picoTemp = unidadPicoMax("temperatura_max");
+  if(picoTemp){
+    secciones.atencion.push({texto:`${picoTemp.placa} estuvo con la temperatura más caliente de la flota (${picoTemp.valor.toFixed(2)}°C)`, color:"var(--warn)", cat:"motor", sub:"variables"});
+  }
+  const picoCarga = unidadPicoMax("carga_max");
+  if(picoCarga){
+    secciones.atencion.push({texto:`${picoCarga.placa} tuvo la carga de motor más alta de la flota (${picoCarga.valor.toFixed(2)}%)`, color:"var(--warn)", cat:"motor", sub:"variables"});
+  }
 
   // ===== 🟢 DESTACADOS — informativo, contexto útil =====
   const galTrim=compararTrimestre(f=>num(f.combustible_total));
@@ -2451,17 +2485,17 @@ function renderResumenHome(){
 
   // ===== Dibuja las secciones (Atención se omite por completo si quedó vacía) =====
   const defs = [
-    {key:"seguridad", titulo:"🔴 Seguridad", color:"var(--crit)"},
-    {key:"atencion", titulo:"🟡 Atención", color:"var(--warn)"},
-    {key:"destacados", titulo:"🟢 Destacados", color:"var(--ok)"},
-    {key:"flota", titulo:"📈 Tu Flota", color:"var(--accent)"}
+    {key:"seguridad", titulo:"Seguridad", letra:"A"},
+    {key:"atencion", titulo:"Atención", letra:"B"},
+    {key:"destacados", titulo:"Destacados", letra:"C"},
+    {key:"flota", titulo:"Tu Flota", letra:"D"}
   ];
-  defs.forEach(({key,titulo,color})=>{
+  defs.forEach(({key,titulo,letra})=>{
     const hallazgos=secciones[key];
     if(hallazgos.length===0) return;
     const wrap=document.createElement("div"); wrap.className="resumen-seccion";
-    wrap.style.setProperty("--rs-color", color);
-    const tit=document.createElement("div"); tit.className="resumen-seccion-titulo"; tit.textContent=titulo;
+    const tit=document.createElement("div"); tit.className="resumen-seccion-titulo";
+    tit.innerHTML=`<span class="resumen-seccion-letra">${letra}</span><span>${titulo}</span>`;
     wrap.appendChild(tit);
     hallazgos.forEach(h=>{
       const item=document.createElement("div"); item.className="resumen-linea";
