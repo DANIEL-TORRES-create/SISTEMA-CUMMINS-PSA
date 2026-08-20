@@ -229,7 +229,7 @@ html, body { margin:0; padding:0; }
 #appRoot .home-hero-title h1 {font-size:24px;font-weight:700;letter-spacing:.01em;}
 #appRoot .home-hero-title .sub {font-size:11px;color:var(--text-dim);letter-spacing:.12em;margin-top:6px;text-transform:uppercase;text-align:center;}
 
-#appRoot .home-body {padding:26px 40px 40px;max-width:1200px;margin:0 auto;}
+#appRoot .home-body {padding:26px 40px 40px;}
 #appRoot .cat-grid {display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
 #appRoot .cat-panel {
     background:var(--bg-panel);border:1px solid var(--line);border-left:4px solid var(--cat-color, var(--accent));border-radius:8px;padding:20px;
@@ -295,8 +295,8 @@ html, body { margin:0; padding:0; }
 #appRoot .btn-spinner {display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid #0A193044;border-top-color:#0A1930;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
 
   /* ===== HOME: TARJETAS DE RESUMEN (basadas en los últimos 3 meses) ===== */
-#appRoot .home-split {display:grid;grid-template-columns:minmax(0,1fr) 140px minmax(0,1fr);gap:32px;align-items:start;}
-#appRoot .home-split-flecha {display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:60px;text-align:center;}
+#appRoot .home-split {display:grid;grid-template-columns:minmax(0,1fr) 140px minmax(0,1fr);gap:32px;align-items:stretch;}
+#appRoot .home-split-flecha {display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
 #appRoot .home-split-flecha-icono {font-size:52px;color:var(--accent);margin-bottom:12px;animation:flecha-pulso 1.8s ease-in-out infinite;}
 #appRoot .home-split-flecha-texto {font-size:13px;font-weight:600;color:var(--text-secondary);line-height:1.5;}
 @keyframes flecha-pulso {0%,100%{transform:translateX(0);opacity:.6;} 50%{transform:translateX(6px);opacity:1;}}
@@ -1062,14 +1062,16 @@ function ajustarPosicionSidenav(){
   const rect = appRoot.getBoundingClientRect();
   sidenav.style.left = Math.max(rect.left, 0) + "px";
   sidenav.style.width = "180px";
-  // El menú ahora es full-height desde el tope de la pantalla real (top:0) — ya NO depende de
-  // medir el alto del encabezado, que era la causa de todos los problemas de posición anteriores
-  // (el encabezado ahora vive DENTRO de .content-area, al costado del menú, no arriba de él).
-  sidenav.style.top = "0px";
-  // Solo se descuenta el alto del ticker fijo de abajo, para que el menú se detenga antes de
+  // El menú es full-height, pero "top:0" NO significa "arriba de la pantalla real" cuando la app
+  // corre embebida dentro de MyGeotab — su propio encabezado nativo está POR ENCIMA de donde
+  // empieza nuestra app, así que hay que medir con JS dónde arranca #appRoot verticalmente
+  // (mismo criterio que ya se usa para "left") en vez de asumir top:0 a secas.
+  const topReal = Math.max(rect.top, 0);
+  sidenav.style.top = topReal + "px";
+  // Se descuenta también el alto del ticker fijo de abajo, para que el menú se detenga antes de
   // llegar a él y nunca se crucen geométricamente, sin importar el z-index de cada uno.
   const altoTicker = ticker ? ticker.getBoundingClientRect().height : 0;
-  sidenav.style.height = `calc(100vh - ${altoTicker}px)`;
+  sidenav.style.height = `calc(100vh - ${topReal}px - ${altoTicker}px)`;
 }
 window.addEventListener("resize", ajustarPosicionSidenav);
 
