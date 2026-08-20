@@ -204,6 +204,12 @@ html, body { margin:0; padding:0; }
   }
 #appRoot .login-btn:hover {opacity:.88;}
 #appRoot .login-error {color:#FF8080;font-size:11px;margin-top:10px;height:14px;}
+#appRoot .login-geotab-detectado {background:#ffffff0d;border:1px solid #ffffff22;border-radius:6px;padding:14px;margin-bottom:16px;text-align:center;}
+#appRoot .login-geotab-lbl {font-size:10px;color:#ffffffaa;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;}
+#appRoot .login-geotab-usuario {font-family:'IBM Plex Mono';font-weight:700;font-size:15px;color:#fff;}
+#appRoot .login-otra-cuenta {text-align:center;font-size:11px;color:#ffffff88;margin-top:14px;cursor:pointer;}
+#appRoot .login-otra-cuenta span {color:var(--nav-light);text-decoration:underline;}
+#appRoot .login-otra-cuenta:hover span {color:#fff;}
 
   /* ===== FONDO DE MARCA (Cummins) — Home y App, después del login ===== */
 #appRoot .brand-bg {
@@ -343,18 +349,31 @@ html, body { margin:0; padding:0; }
     <div class="login-brand" id="loginLogoSlot">C</div>
     <div class="login-title">CUMMINS · NAVISAF</div>
     <div class="login-sub">— ACCESO AL SISTEMA —</div>
-    <div class="login-field"><label>Usuario</label><input type="text" id="loginUser" name="psaUsuario" autocomplete="off" placeholder="usuario"></div>
-    <div class="login-field"><label>Contraseña</label>
-      <div style="position:relative;">
-        <input type="password" id="loginPass" name="psaClave" autocomplete="new-password" placeholder="••••••••" style="padding-right:38px;">
-        <span id="togglePass" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;user-select:none;display:flex;">
-          <svg id="eyeOpen" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffffffaa" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
-          <svg id="eyeClosed" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffffffaa" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a21.8 21.8 0 015.06-6.06M9.9 4.24A10.94 10.94 0 0112 4c7 0 11 7 11 7a21.7 21.7 0 01-2.16 3.19M14.12 14.12a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-        </span>
+
+    <div id="loginGeotabBlock" style="display:none;">
+      <div class="login-geotab-detectado">
+        <div class="login-geotab-lbl">Sesión detectada en MyGeotab</div>
+        <div class="login-geotab-usuario" id="loginGeotabUsuario">—</div>
       </div>
+      <button class="login-btn" id="loginBtnGeotab">ACCEDER</button>
+      <div class="login-error" id="loginErrorGeotab"></div>
+      <div class="login-otra-cuenta" id="loginOtraCuenta">¿No eres tú? <span>Ingresar con otra cuenta</span></div>
     </div>
-    <button class="login-btn" id="loginBtn" disabled>INGRESAR</button>
-    <div class="login-error" id="loginError"></div>
+
+    <div id="loginManualBlock">
+      <div class="login-field"><label>Usuario</label><input type="text" id="loginUser" name="psaUsuario" autocomplete="off" placeholder="usuario"></div>
+      <div class="login-field"><label>Contraseña</label>
+        <div style="position:relative;">
+          <input type="password" id="loginPass" name="psaClave" autocomplete="new-password" placeholder="••••••••" style="padding-right:38px;">
+          <span id="togglePass" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;user-select:none;display:flex;">
+            <svg id="eyeOpen" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffffffaa" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg id="eyeClosed" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffffffaa" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a21.8 21.8 0 015.06-6.06M9.9 4.24A10.94 10.94 0 0112 4c7 0 11 7 11 7a21.7 21.7 0 01-2.16 3.19M14.12 14.12a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </span>
+        </div>
+      </div>
+      <button class="login-btn" id="loginBtn" disabled>INGRESAR</button>
+      <div class="login-error" id="loginError"></div>
+    </div>
   </div>
 
   <button id="btnSkipVideo" style="position:absolute;top:26px;right:26px;background:#00000099;border:1px solid #ffffff33;color:#fff;padding:8px 16px;border-radius:20px;font-family:'IBM Plex Mono';font-size:11px;cursor:pointer;">Detener video ▸</button>
@@ -841,8 +860,82 @@ function boot(){
   let pct=0;
   const iv=setInterval(()=>{
     pct+=4; fill.style.width=Math.min(pct,100)+"%";
-    if(pct>=100){ clearInterval(iv); setTimeout(()=>{ document.getElementById("boot").classList.add("hide"); mostrarVideoIntro(); },300); }
+    if(pct>=100){
+      clearInterval(iv);
+      setTimeout(async ()=>{
+        document.getElementById("boot").classList.add("hide");
+        mostrarVideoIntro();
+        // Si corre embebido en MyGeotab, detecta el usuario y prepara la tarjeta en modo
+        // "Acceder" (sin pedir clave) — pero espera el clic de la persona para entrar de verdad.
+        // Si no aplica o falla, la tarjeta se queda en modo manual normal, sin ningún aviso.
+        intentarAutoLoginGeotab();
+      },300);
+    }
   },70);
+}
+
+// Auto-detección (NO auto-login directo): cuando la app corre como Add-In dentro de MyGeotab,
+// usa geotabApi.getSession() para saber quién es el usuario ya logueado en MyGeotab y confirma
+// contra el backend que esté autorizado — pero espera a que la persona haga clic en "ACCEDER"
+// antes de entrar, para que quede bajo su control. Devuelve true si detectó y preparó un usuario
+// válido (el flujo de video sigue normal en cualquier caso).
+let TOKEN_GEOTAB_PENDIENTE = null;
+async function intentarAutoLoginGeotab(){
+  if(typeof geotabApi === "undefined" || !geotabApi.getSession) return false;
+  if(CONFIG.USAR_DATOS_DEMO) return false; // en modo demo siempre se pide login manual, a propósito
+  try{
+    const session = await new Promise((resolve,reject)=>{
+      geotabApi.getSession(s=>resolve(s), e=>reject(e));
+    });
+    if(!session || !session.userName) return false;
+
+    const resp = await fetch(CONFIG.API_URL, {
+      method:"POST",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({accion:"login_geotab", usuario:session.userName})
+    });
+    const json = await resp.json();
+    if(!json.ok || !json.token) return false; // no autorizado -> sin mensaje especial, cae al login manual normal
+
+    TOKEN_GEOTAB_PENDIENTE = json.token;
+    mostrarModoGeotab(session.userName);
+    return true;
+  }catch(e){
+    return false; // cualquier falla cae al flujo manual normal, en silencio
+  }
+}
+
+function mostrarModoGeotab(usuario){
+  document.getElementById("loginGeotabUsuario").textContent = usuario;
+  document.getElementById("loginGeotabBlock").style.display = "block";
+  document.getElementById("loginManualBlock").style.display = "none";
+}
+function mostrarModoManual(){
+  document.getElementById("loginGeotabBlock").style.display = "none";
+  document.getElementById("loginManualBlock").style.display = "block";
+  TOKEN_GEOTAB_PENDIENTE = null; // si vuelve a manual, el token detectado ya no aplica
+}
+
+// Se ejecuta al hacer clic en "ACCEDER" dentro del modo MyGeotab — usa el token que ya se
+// había obtenido al detectar la sesión (no vuelve a llamar login_geotab).
+async function confirmarAccesoGeotab(){
+  const btn=document.getElementById("loginBtnGeotab");
+  const err=document.getElementById("loginErrorGeotab");
+  if(!TOKEN_GEOTAB_PENDIENTE){ err.textContent="La sesión expiró, usa el ingreso manual."; mostrarModoManual(); return; }
+  err.textContent="";
+  btn.disabled=true; btn.innerHTML=`<span class="btn-spinner"></span>Cargando datos...`;
+  SESSION_TOKEN = TOKEN_GEOTAB_PENDIENTE;
+  try{
+    await cargarDatosReales();
+    ajustarPeriodoAUltimoDato();
+    sincronizarSelectoresPeriodo();
+    poblarSelectorUnidades();
+    renderResumenHome();
+    mostrarHome();
+  }catch(e){
+    err.textContent="No se pudieron cargar los datos: "+e.message;
+    btn.disabled=false; btn.innerHTML="ACCEDER";
+  }
 }
 
 /* ===== NAVEGACIÓN ENTRE PANTALLAS ===== */
@@ -933,10 +1026,17 @@ async function intentarLogin(){
     ok = (u===CONFIG.DEMO_USUARIO && p===CONFIG.DEMO_CLAVE);
   } else {
     try{
-      const resp = await fetch(CONFIG.API_URL+"?accion=login&usuario="+encodeURIComponent(u)+"&clave="+encodeURIComponent(p));
+      // POST en vez de GET: usuario y clave viajan en el cuerpo de la petición, no en la URL
+      // (así no quedan visibles en el historial del navegador ni en los logs del servidor).
+      const resp = await fetch(CONFIG.API_URL, {
+        method:"POST",
+        headers:{"Content-Type":"text/plain;charset=utf-8"}, // Apps Script lee mejor el body así, evita el preflight CORS de application/json
+        body: JSON.stringify({accion:"login", usuario:u, clave:p})
+      });
       const json = await resp.json();
       ok = !!json.ok;
       if(ok) SESSION_TOKEN = json.token;
+      else if(json.error) err.textContent = json.error; // ej. "Demasiados intentos fallidos..."
     }catch(e){
       err.textContent="Error de conexión con el servidor.";
       btn.dataset.cargando=""; btn.innerHTML="INGRESAR"; actualizarEstadoBotonLogin();
@@ -944,7 +1044,7 @@ async function intentarLogin(){
     }
   }
   if(!ok){
-    err.textContent="Usuario o contraseña incorrectos.";
+    if(!err.textContent) err.textContent="Usuario o contraseña incorrectos."; // solo el genérico si el servidor no mandó uno específico (ej. bloqueo por intentos)
     btn.dataset.cargando=""; btn.innerHTML="INGRESAR"; actualizarEstadoBotonLogin();
     return;
   }
@@ -1112,6 +1212,8 @@ function init(){
     document.getElementById("eyeClosed").style.display = nowShown ? "none":"block";
   });
   on("loginBtn","click", intentarLogin);
+  on("loginBtnGeotab","click", confirmarAccesoGeotab);
+  on("loginOtraCuenta","click", mostrarModoManual);
   on("loginPass","keydown", e=>{ if(e.key==="Enter" && !document.getElementById("loginBtn").disabled) intentarLogin(); });
   on("loginUser","input", actualizarEstadoBotonLogin);
   on("loginPass","input", actualizarEstadoBotonLogin);
