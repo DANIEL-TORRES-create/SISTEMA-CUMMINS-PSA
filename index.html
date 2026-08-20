@@ -76,11 +76,13 @@ html, body { margin:0; padding:0; }
 #appRoot .brand-text .name {font-family:'IBM Plex Mono';font-weight:700;font-size:14px;letter-spacing:.08em;}
 #appRoot .brand-text .sub {color:var(--text-dim);font-size:10px;letter-spacing:.08em;margin-top:1px;}
 #appRoot .topbar-stats {display:flex;gap:26px;margin-left:auto;align-items:center;}
-#appRoot .stat-chip {display:flex;flex-direction:column;align-items:center;}
+#appRoot .stat-chip {display:flex;flex-direction:column;align-items:center;justify-content:center;}
 #appRoot .stat-chip .val {font-family:'IBM Plex Mono';font-weight:600;font-size:16px;}
 #appRoot .stat-chip .lbl {font-size:10px;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;}
 #appRoot .stat-chip.alert .val {color:var(--brand);}
-#appRoot .stat-chip.update {align-items:flex-start;border-left:1px solid var(--line);padding-left:20px;}
+#appRoot .stat-chip.update {align-items:center;justify-content:center;border-left:1px solid var(--line);padding-left:20px;}
+#appRoot .stat-chip.update .val {font-size:20px;}
+#appRoot .stat-chip.update .lbl {font-size:11px;}
 #appRoot .unit-switcher {
     background:var(--bg-raised); border:1px solid var(--line); border-radius:var(--radius);
     padding:8px 14px; display:flex; align-items:center; gap:10px;
@@ -96,7 +98,7 @@ html, body { margin:0; padding:0; }
        bien en el entorno embebido de MyGeotab — fixed es más simple y predecible, se ancla directo
        a la ventana visible sin depender del nivel de anidación. La columna de 180px del grid sigue
        reservando el espacio para que el contenido de la derecha (.main) no se monte encima. */
-    position:fixed; top:64px; left:0; width:180px; height:calc(100vh - 64px); overflow-y:auto; z-index:140;
+    position:fixed; top:64px; left:0; width:180px; height:calc(100vh - 64px); overflow-y:auto; z-index:9999;
   }
 #appRoot .nav-item {display:flex;align-items:center;gap:12px;padding:13px 22px;color:var(--text-secondary);cursor:pointer;font-size:13px;font-weight:500;letter-spacing:.03em;border-left:2px solid transparent;transition:all .15s;}
 #appRoot .nav-item:hover {color:var(--text-primary);background:var(--bg-raised);}
@@ -297,7 +299,7 @@ html, body { margin:0; padding:0; }
 @keyframes flecha-pulso {0%,100%{transform:translateX(0);opacity:.6;} 50%{transform:translateX(6px);opacity:1;}}
 #appRoot .home-col-title {font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--line);}
 #appRoot .resumen-lista {display:flex;flex-direction:column;}
-#appRoot .resumen-seccion {margin-bottom:24px;background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:14px 18px;}
+#appRoot .resumen-seccion {margin-bottom:36px;background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:14px 18px;}
 #appRoot .resumen-seccion-titulo {display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-primary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
 #appRoot .resumen-seccion-letra {display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:var(--bg-raised);border:1px solid var(--line-bright);font-family:'IBM Plex Mono';font-weight:700;font-size:12px;color:var(--text-primary);flex-shrink:0;}
 #appRoot .resumen-linea {display:flex;align-items:baseline;gap:8px;padding:6px 0;cursor:pointer;}
@@ -398,7 +400,7 @@ html, body { margin:0; padding:0; }
   <div class="unit-switcher"><span class="mono" style="font-size:11px;color:var(--text-dim);">UNIDAD</span><select id="unitSelect"></select></div>
   <div class="topbar-stats">
     <div class="stat-chip"><span class="val mono" id="statTotal">--</span><span class="lbl">Unidades</span></div>
-    <div class="stat-chip update"><span class="val mono" id="statUltimaActualizacion" style="font-size:13px;">--</span><span class="lbl">Última actualización</span></div>
+    <div class="stat-chip update"><span class="val mono" id="statUltimaActualizacion">--</span><span class="lbl">Última actualización</span></div>
   </div>
 </div>
 
