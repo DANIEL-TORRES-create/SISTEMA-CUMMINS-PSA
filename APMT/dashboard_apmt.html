@@ -2466,6 +2466,7 @@ function mostrarVideoIntro(){
 function mostrarHome(){ mostrarApp("inicio"); }
 async function mostrarApp(cat, sub){
   nuevaNavegacion();
+  registrarCargaAPMT("navegacion-inicio",{categoria:cat,subvista:sub||null});
   // Apaga el video/login la PRIMERA vez que se entra al aplicativo (antes
   // esto vivía en mostrarHome(), que hacía de "puerta" única hacia
   // #screenApp -- ahora mostrarApp() es esa única puerta, para CUALQUIER
@@ -2570,6 +2571,7 @@ async function mostrarApp(cat, sub){
   requestAnimationFrame(()=>{
     if(contextoComparativaMensual()!==contextoEntrada)return;
     render(); ajustarPosicionSidenav();
+    registrarCargaAPMT("navegacion-render-ejecutado",{categoria:cat});
     if(eraHome && cat!=="inicio") animarContenidoShell(document.querySelector("#screenApp .sidenav"),false);
     // Se vuelve a medir varias veces mientras la página (dentro o fuera de MyGeotab) termina de
     // acomodar su propio layout — en vez de sumar un margen fijo a ciegas (que solo sirve para
@@ -2578,8 +2580,30 @@ async function mostrarApp(cat, sub){
     setTimeout(resizeAllCharts,60);
   });
 }
+let _resizeChartsFrame=null;
 function resizeAllCharts(){
-  document.querySelectorAll('[id^="g_"],[id$="_chart"],#homeChartActividad,#homeChartUsoFlota,#trendMotor,#trendOperacion,#trendGalones,#trendEncendidos,#trendUsoFlotaBarras,#trendFallas,#trendSeguridad,#chartSegRegla,#chartSegTurno,#trendPerformanceRpm,#trendMtto,#chartDisponibilidadOperacion').forEach(el=>{ const i=echarts.getInstanceByDom(el); if(i) i.resize(); });
+  if(_resizeChartsFrame!==null)cancelAnimationFrame(_resizeChartsFrame);
+  const contexto=contextoComparativaMensual();
+  const elementos=[...document.querySelectorAll('[id^="g_"],[id$="_chart"],#homeChartActividad,#homeChartUsoFlota,#trendMotor,#trendOperacion,#trendGalones,#trendEncendidos,#trendUsoFlotaBarras,#trendFallas,#trendSeguridad,#chartSegRegla,#chartSegTurno,#trendPerformanceRpm,#trendMtto,#chartDisponibilidadOperacion')];let indice=0;
+  const siguiente=()=>{
+    _resizeChartsFrame=null;
+    if(contextoComparativaMensual()!==contexto)return;
+    while(indice<elementos.length){
+      const el=elementos[indice++];
+      if(!el.isConnected || !el.getClientRects().length || !el.clientWidth || !el.clientHeight || getComputedStyle(el).visibility==="hidden")continue;
+      const instancia=echarts.getInstanceByDom(el);if(!instancia)continue;
+      const estilo=getComputedStyle(el);
+      const ancho=el.clientWidth-(parseFloat(estilo.paddingLeft)||0)-(parseFloat(estilo.paddingRight)||0);
+      const alto=el.clientHeight-(parseFloat(estilo.paddingTop)||0)-(parseFloat(estilo.paddingBottom)||0);
+      if(typeof instancia.getWidth==="function" && typeof instancia.getHeight==="function" &&
+        instancia.getWidth()===ancho && instancia.getHeight()===alto &&
+        (instancia.getDevicePixelRatio?.()??window.devicePixelRatio)===window.devicePixelRatio)continue;
+      const inicio=performance.now();instancia.resize();
+      registrarCargaAPMT("grafico-redimensionado",{id:el.id,ms:performance.now()-inicio});break;
+    }
+    if(indice<elementos.length)_resizeChartsFrame=requestAnimationFrame(siguiente);
+  };
+  _resizeChartsFrame=requestAnimationFrame(siguiente);
 }
 
 // Feedback DOM breve: no espera, no carga datos y no toca instancias ECharts.
@@ -2830,27 +2854,67 @@ async function esperarIndiceTemporal(){
 let _navegacionId=0;
 const _colaRecursos=new Map();
 let _recursosActivos=0,_historicosActivos=0;
-function prioridadRecurso(t){return t.demanda===_navegacionId?2:0;}
+// Un conjunto anual no consume el puesto reservado para un mes individual.
+function prioridadRecurso(t){return t.demanda!==_navegacionId?0:mesActual===null?1:2;}
 function promoverRecurso(clave,demanda){
  const t=_colaRecursos.get(clave);if(t && demanda>=0){t.demanda=Math.max(t.demanda,demanda);despacharRecursos();}
 }
 function despacharRecursos(){
  while(_recursosActivos<2){
-  const t=[..._colaRecursos.values()].filter(t=>!t.activa && (prioridadRecurso(t)>0 || _historicosActivos<1)).sort((a,b)=>prioridadRecurso(b)-prioridadRecurso(a))[0];
+  const t=[..._colaRecursos.values()].filter(t=>!t.activa && (prioridadRecurso(t)>1 || _historicosActivos<1)).sort((a,b)=>prioridadRecurso(b)-prioridadRecurso(a))[0];
   if(!t)return;
-  t.activa=true;const historica=prioridadRecurso(t)===0;
+  t.activa=true;t.iniciada=performance.now();const historica=prioridadRecurso(t)<2;
+  registrarCargaAPMT("recurso-inicio",{clave:t.clave,prioridad:prioridadRecurso(t),esperaMs:t.iniciada-t.creada});
   _recursosActivos++;if(historica)_historicosActivos++;
   const liberar=()=>{_colaRecursos.delete(t.clave);_recursosActivos--;if(historica)_historicosActivos--;};
   Promise.resolve().then(t.operacion).then(valor=>{
-   liberar();t.resolve(valor);despacharRecursos();
-  },error=>{liberar();t.reject(error);despacharRecursos();});
+   registrarCargaAPMT("recurso-fin",{clave:t.clave,ms:performance.now()-t.iniciada});liberar();t.resolve(valor);despacharRecursos();
+  },error=>{registrarCargaAPMT("recurso-error",{clave:t.clave,ms:performance.now()-t.iniciada,tipo:error.name});liberar();t.reject(error);despacharRecursos();});
  }
 }
 function programarRecurso(clave,demanda,operacion){
  const t=_colaRecursos.get(clave);if(t){promoverRecurso(clave,demanda);return t.promise;}
  let resolve,reject;const promise=new Promise((ok,fail)=>{resolve=ok;reject=fail;});
- _colaRecursos.set(clave,{clave,demanda,operacion,promise,resolve,reject,activa:false});despacharRecursos();return promise;
+ _colaRecursos.set(clave,{clave,demanda,operacion,promise,resolve,reject,activa:false,creada:performance.now()});registrarCargaAPMT("recurso-encolado",{clave,demanda});despacharRecursos();return promise;
 }
+// Diagnóstico temporal, acotado y desactivado por defecto. No registra datos ni tokens.
+let _diagnosticoCargaActivo=false,_observadorCarga=null;
+const _eventosCargaAPMT=[];
+function registrarCargaAPMT(evento,detalle={}){
+ if(!_diagnosticoCargaActivo)return;
+ _eventosCargaAPMT.push({evento,tiempo:performance.now(),navegacion:_navegacionId,...detalle});
+ if(_eventosCargaAPMT.length>300)_eventosCargaAPMT.shift();
+}
+function estadoCargaAPMT(){
+ const ahora=performance.now();
+ const vista=el=>({id:el.id,display:getComputedStyle(el).display,visibility:getComputedStyle(el).visibility,busy:el.getAttribute("aria-busy")});
+ const menu=document.querySelector('.nav-item.active');
+ const rect=menu?.getBoundingClientRect();
+ const encima=rect && rect.width && rect.height?document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2):null;
+ return {version:"APMT-coordinacion-20261020-2",diagnosticoActivo:_diagnosticoCargaActivo,navegacion:_navegacionId,
+  seleccion:{categoria:categoriaActual,subvista:subvistaActual,anio:anioActual,mes:mesActual===null?null:mesActual+1},
+  activos:_recursosActivos,puestosNoUrgentes:_historicosActivos,
+  cola:[..._colaRecursos.values()].map(t=>({clave:t.clave,estado:t.activa?"activa":"pendiente",prioridad:prioridadRecurso(t),ms:ahora-(t.iniciada??t.creada)})),
+  detallesCompletos:Object.keys(DETALLE_CACHE_POR_PERIODO),resumenesCompletos:Object.keys(RESUMENES_CARGADOS),
+  preparaciones:[..._preparacionesHistoricas.keys()],vistaEnCarga:!!_vistasEnCarga,errorPeriodo:!!_errorPeriodo,
+  vistas:[...document.querySelectorAll("#viewInicio,#viewMotor,#viewOperacion,#viewSeguridad,#viewMantenimiento,#viewPerformanceRpm,#viewSeguridadEventos")].map(vista),
+  bloqueadores:[...document.querySelectorAll("#boot,#screenVideoIntro,#adminFlotaOverlay,.monthly-preparation")].map(vista),
+  sobreMenu:encima?{id:encima.id,tag:encima.tagName,clase:String(encima.className)}:null};
+}
+window.apmtDiagnostico={
+ activar(){
+  _diagnosticoCargaActivo=true;
+  if(!_observadorCarga && typeof PerformanceObserver!=="undefined"){
+   try{_observadorCarga=new PerformanceObserver(lista=>lista.getEntries().forEach(e=>registrarCargaAPMT("tarea-larga",{inicio:e.startTime,ms:e.duration})));
+    _observadorCarga.observe({type:"longtask",buffered:false});
+   }catch{_observadorCarga?.disconnect();_observadorCarga=null;}
+  }
+  registrarCargaAPMT("diagnostico-inicio");return estadoCargaAPMT();
+ },
+ desactivar(){_diagnosticoCargaActivo=false;_observadorCarga?.disconnect();_observadorCarga=null;},
+ estado:estadoCargaAPMT,
+ exportar(){return {estado:estadoCargaAPMT(),eventos:[..._eventosCargaAPMT]};}
+};
 const _demandasDetalle=new Map(),_demandasResumen=new Map();
 const _oyentesRecursos=new Set();
 function notificarRecursos(){_oyentesRecursos.forEach(fn=>{try{fn();}catch(error){console.error("[APMT] Progreso",error);}});}
@@ -2865,7 +2929,7 @@ function ocultarVistasEnCarga(contexto){
  vistas.forEach(([el])=>{el.style.visibility="hidden";});_vistasEnCarga={contexto,vistas};
 }
 function nuevaNavegacion(){
- ++_navegacionId;++_cargaPeriodoId;restaurarVistasEnCarga();limpiarErrorPeriodo();mostrarCargaPeriodo(false);
+ ++_navegacionId;++_cargaPeriodoId;registrarCargaAPMT("navegacion-invalidada");restaurarVistasEnCarga();limpiarErrorPeriodo();mostrarCargaPeriodo(false);
  if(_progresoPeriodoHome){_progresoPeriodoHome.control.cancelar();_progresoPeriodoHome.nodo.remove();_progresoPeriodoHome=null;}
 }
 async function esperarConjuntoRecursos(promesas){
@@ -3116,6 +3180,8 @@ function _mergerPeriodoEnData(detalleUnificado){
 let _consolidacionEnCurso=Promise.resolve();
 function consolidarPeriodoSinBloquear(detalle){
  const trabajo=_consolidacionEnCurso.then(async()=>{
+  const inicioConsolidacionAPMT=performance.now();registrarCargaAPMT("consolidacion-inicio");
+  try{
   const placas=Object.keys(detalle.unidades);let inicio=performance.now();
   for(let i=0;i<placas.length;i++){
    const placa=placas[i];_mergerPeriodoEnData({unidades:{[placa]:detalle.unidades[placa]}});
@@ -3123,6 +3189,7 @@ function consolidarPeriodoSinBloquear(detalle){
     await new Promise(resolve=>setTimeout(resolve,0));inicio=performance.now();
    }
   }
+  }finally{registrarCargaAPMT("consolidacion-fin",{ms:performance.now()-inicioConsolidacionAPMT});}
  });
  _consolidacionEnCurso=trabajo.catch(()=>{});return trabajo;
 }
@@ -3394,7 +3461,7 @@ async function asegurarPeriodosCargados(periodos=null,actualizarUnidades=true,de
     }
     return _detalleEnCurso[clave];
   }));
-  _logTiming(`asegurarPeriodosCargados: Promise.all (${pendientes.length} pendiente(s)) total ${(performance.now()-_tFetch0).toFixed(1)}ms`);
+  _logTiming(`asegurarPeriodosCargados: conjunto completado (${pendientes.length} pendiente(s)) total ${(performance.now()-_tFetch0).toFixed(1)}ms`);
 
   // Las respuestas se validan y mergean antes de marcar cada período como cargado.
 
@@ -3910,6 +3977,8 @@ function valorSegunMetrica(arr){
 }
 
 function render(){
+ const inicioRenderAPMT=performance.now();registrarCargaAPMT("render-inicio",{categoria:categoriaActual});
+ try{
  if(_errorPeriodo){
   if(_errorPeriodo.contexto===contextoComparativaMensual())return;
   limpiarErrorPeriodo();
@@ -3957,6 +4026,7 @@ function render(){
   if(categoriaActual!=="inicio")iniciarPreparacionHistorica({campos:camposHistoricosModulo()}).catch(()=>{});
   renderTicker();
   animarContenidoShell(document.querySelector(categoriaActual==="inicio"?"#viewInicio":"#screenApp .main"));
+ }finally{registrarCargaAPMT("render-fin",{ms:performance.now()-inicioRenderAPMT});}
 }
 
 // Guarda defensiva contra ECharts recibiendo un valor inválido (la causa
@@ -4308,11 +4378,30 @@ function crearProgresoComparativa(el,contexto,{textoSecundario=null}={}){
     cancelar
   };
 }
-function prepararComparativaMensual(destino,renderer,{campos=null}={}){
+function prepararComparativaMensual(destino,renderer,{campos=null,diferir=false}={}){
   if(categoriaActual==="inicio")return false;
   const el=document.getElementById(destino);if(!el)return false;
   const contexto=contextoComparativaMensual(),previo=_comparativasEnVista.get(el);
-  if(previo && previo.contexto!==contexto){previo.progreso?.cancelar();_comparativasEnVista.delete(el);}
+  if(previo && previo.contexto!==contexto){previo.observer?.disconnect();previo.progreso?.cancelar();_comparativasEnVista.delete(el);}
+  // Respeta la petición diferir:true ya existente sin cambiar la tabla ni sus datos.
+  const rect=el.getBoundingClientRect();
+  if(diferir && typeof IntersectionObserver!=="undefined" &&
+    (rect.bottom<0 || rect.top>window.innerHeight || rect.right<0 || rect.left>window.innerWidth || !rect.width)){
+    if(_comparativasEnVista.get(el)?.contexto===contexto)return false;
+    const pendiente={contexto,observer:null};
+    pendiente.observer=new IntersectionObserver(entradas=>{
+      if(!el.isConnected || contextoComparativaMensual()!==contexto){
+        pendiente.observer.disconnect();if(_comparativasEnVista.get(el)===pendiente)_comparativasEnVista.delete(el);return;
+      }
+      if(!entradas.some(e=>e.isIntersecting))return;
+      pendiente.observer.disconnect();
+      if(_comparativasEnVista.get(el)!==pendiente)return;
+      _comparativasEnVista.delete(el);registrarCargaAPMT("comparativa-visible",{id:destino});renderer();resizeAllCharts();
+    });
+    _comparativasEnVista.set(el,pendiente);pendiente.observer.observe(el);
+    registrarCargaAPMT("comparativa-diferida",{id:destino});return false;
+  }
+  if(_comparativasEnVista.get(el)?.observer){_comparativasEnVista.get(el).observer.disconnect();_comparativasEnVista.delete(el);}
   if(_indiceListo || CONFIG.USAR_DATOS_DEMO){
     if(comparativaMensualCompleta(campos)){
       _comparativasEnVista.delete(el);el.setAttribute("aria-busy","false");
