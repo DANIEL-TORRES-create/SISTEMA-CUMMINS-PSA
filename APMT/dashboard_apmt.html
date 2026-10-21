@@ -2466,7 +2466,6 @@ function mostrarVideoIntro(){
 function mostrarHome(){ mostrarApp("inicio"); }
 async function mostrarApp(cat, sub){
   nuevaNavegacion();
-  registrarCargaAPMT("navegacion-inicio",{categoria:cat,subvista:sub||null});
   // Apaga el video/login la PRIMERA vez que se entra al aplicativo (antes
   // esto vivía en mostrarHome(), que hacía de "puerta" única hacia
   // #screenApp -- ahora mostrarApp() es esa única puerta, para CUALQUIER
@@ -2552,26 +2551,13 @@ async function mostrarApp(cat, sub){
   // que ambas rutas pasan por la misma carga.
   limpiarErrorPeriodo();
   const contextoEntrada=contextoComparativaMensual();
-  if(cat!=="inicio"){
-    ocultarVistasEnCarga(contextoEntrada);
-    try{
-      await asegurarPeriodosCargados();
-    }catch(err){
-      // Mismo criterio que el listener de unitSelect: registrar el fallo
-      // real, sin renderizar un detalle vacío disfrazado de "sin datos".
-      console.error(`No se pudo cargar el detalle del período: ${err.message}`);
-      if(contextoComparativaMensual()===contextoEntrada){restaurarVistasEnCarga();mostrarErrorPeriodo();}
-      return;
-    }
-  }
+  if(cat!=="inicio" && !recursosPeriodoListos() && !(await _cargarPeriodoSiHaceFalta()))return;
   if(contextoComparativaMensual()!==contextoEntrada)return;
-  restaurarVistasEnCarga();
   sincronizarSelectoresPeriodo();
 
   requestAnimationFrame(()=>{
     if(contextoComparativaMensual()!==contextoEntrada)return;
     render(); ajustarPosicionSidenav();
-    registrarCargaAPMT("navegacion-render-ejecutado",{categoria:cat});
     if(eraHome && cat!=="inicio") animarContenidoShell(document.querySelector("#screenApp .sidenav"),false);
     // Se vuelve a medir varias veces mientras la página (dentro o fuera de MyGeotab) termina de
     // acomodar su propio layout — en vez de sumar un margen fijo a ciegas (que solo sirve para
@@ -2829,16 +2815,18 @@ async function conTimeoutRecurso(timeoutMs,operacion){
   try{return await Promise.race([Promise.resolve().then(()=>operacion(controller?.signal)),limite]);}
   finally{clearTimeout(timer);}
 }
-async function leerRespuestaJson(resp,contexto){
+async function leerRespuestaJson(resp,contexto,medida=null){
   const tipo=resp.headers?.get?.("content-type")||"sin Content-Type";
   if(!resp.ok){
     const error=new Error("Respuesta HTTP "+resp.status);
-    console.error("[APMT] "+contexto,{status:resp.status,contentType:tipo,redirected:resp.redirected,dominioFinal:resp.url?new URL(resp.url).hostname:null,error});
+    console.error("[APMT] "+contexto,{status:resp.status,contentType:tipo,error});
     throw error;
   }
   try{
-    const texto=await resp.text();
-    try{return JSON.parse(texto);}catch(causa){
+    const inicioCuerpo=performance.now();const texto=await resp.text();
+    if(medida)medida.cuerpoMs=performance.now()-inicioCuerpo;
+    const inicioJson=performance.now();
+    try{const json=JSON.parse(texto);if(medida)medida.jsonMs=performance.now()-inicioJson;return json;}catch(causa){
       console.error("[APMT] "+contexto+" recibió contenido no JSON",{status:resp.status,contentType:tipo,tipo:/^\s*</.test(texto)?"HTML":"contenido inesperado",causa});
       throw new Error("Respuesta no JSON en "+contexto,{cause:causa});
     }
@@ -2850,74 +2838,84 @@ async function esperarIndiceTemporal(){
   if(_indiceEnCurso){await _indiceEnCurso;return;}
   await cargarIndicePeriodos();
 }
-// Cola compartida: dos recursos simultáneos como máximo, uno histórico.
-let _navegacionId=0;
-const _colaRecursos=new Map();
-let _recursosActivos=0,_historicosActivos=0;
-// Un conjunto anual no consume el puesto reservado para un mes individual.
-function prioridadRecurso(t){return t.demanda!==_navegacionId?0:mesActual===null?1:2;}
-function promoverRecurso(clave,demanda){
- const t=_colaRecursos.get(clave);if(t && demanda>=0){t.demanda=Math.max(t.demanda,demanda);despacharRecursos();}
-}
-function despacharRecursos(){
- while(_recursosActivos<2){
-  const t=[..._colaRecursos.values()].filter(t=>!t.activa && (prioridadRecurso(t)>1 || _historicosActivos<1)).sort((a,b)=>prioridadRecurso(b)-prioridadRecurso(a))[0];
-  if(!t)return;
-  t.activa=true;t.iniciada=performance.now();const historica=prioridadRecurso(t)<2;
-  registrarCargaAPMT("recurso-inicio",{clave:t.clave,prioridad:prioridadRecurso(t),esperaMs:t.iniciada-t.creada});
-  _recursosActivos++;if(historica)_historicosActivos++;
-  const liberar=()=>{_colaRecursos.delete(t.clave);_recursosActivos--;if(historica)_historicosActivos--;};
-  Promise.resolve().then(t.operacion).then(valor=>{
-   registrarCargaAPMT("recurso-fin",{clave:t.clave,ms:performance.now()-t.iniciada});liberar();t.resolve(valor);despacharRecursos();
-  },error=>{registrarCargaAPMT("recurso-error",{clave:t.clave,ms:performance.now()-t.iniciada,tipo:error.name});liberar();t.reject(error);despacharRecursos();});
- }
-}
-function programarRecurso(clave,demanda,operacion){
- const t=_colaRecursos.get(clave);if(t){promoverRecurso(clave,demanda);return t.promise;}
- let resolve,reject;const promise=new Promise((ok,fail)=>{resolve=ok;reject=fail;});
- _colaRecursos.set(clave,{clave,demanda,operacion,promise,resolve,reject,activa:false,creada:performance.now()});registrarCargaAPMT("recurso-encolado",{clave,demanda});despacharRecursos();return promise;
-}
-// Diagnóstico temporal, acotado y desactivado por defecto. No registra datos ni tokens.
-let _diagnosticoCargaActivo=false,_observadorCarga=null;
+// Coordinación técnica: dos recursos de conjunto y un puesto para el mes vigente.
+let _navegacionId=0,_recursosActivos=0;
+const _colaRecursos=new Map(),_demandasRecursos=new Map(),_oyentesRecursos=new Set();
+let _diagnosticoActivo=false,_observadorCarga=null;
 const _eventosCargaAPMT=[];
 function registrarCargaAPMT(evento,detalle={}){
- if(!_diagnosticoCargaActivo)return;
+ if(!_diagnosticoActivo)return;
  _eventosCargaAPMT.push({evento,tiempo:performance.now(),navegacion:_navegacionId,...detalle});
  if(_eventosCargaAPMT.length>300)_eventosCargaAPMT.shift();
 }
-function estadoCargaAPMT(){
- const ahora=performance.now();
- const vista=el=>({id:el.id,display:getComputedStyle(el).display,visibility:getComputedStyle(el).visibility,busy:el.getAttribute("aria-busy")});
- const menu=document.querySelector('.nav-item.active');
- const rect=menu?.getBoundingClientRect();
- const encima=rect && rect.width && rect.height?document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2):null;
- return {version:"APMT-coordinacion-20261020-2",diagnosticoActivo:_diagnosticoCargaActivo,navegacion:_navegacionId,
-  seleccion:{categoria:categoriaActual,subvista:subvistaActual,anio:anioActual,mes:mesActual===null?null:mesActual+1},
-  activos:_recursosActivos,puestosNoUrgentes:_historicosActivos,
-  cola:[..._colaRecursos.values()].map(t=>({clave:t.clave,estado:t.activa?"activa":"pendiente",prioridad:prioridadRecurso(t),ms:ahora-(t.iniciada??t.creada)})),
-  detallesCompletos:Object.keys(DETALLE_CACHE_POR_PERIODO),resumenesCompletos:Object.keys(RESUMENES_CARGADOS),
-  preparaciones:[..._preparacionesHistoricas.keys()],vistaEnCarga:!!_vistasEnCarga,errorPeriodo:!!_errorPeriodo,
-  vistas:[...document.querySelectorAll("#viewInicio,#viewMotor,#viewOperacion,#viewSeguridad,#viewMantenimiento,#viewPerformanceRpm,#viewSeguridadEventos")].map(vista),
-  bloqueadores:[...document.querySelectorAll("#boot,#screenVideoIntro,#adminFlotaOverlay,.monthly-preparation")].map(vista),
-  sobreMenu:encima?{id:encima.id,tag:encima.tagName,clase:String(encima.className)}:null};
+function prioridadRecurso(t){
+ if(mesActual!==null && t.clave.split(":")[1]===anioActual+"-"+(mesActual+1))return 2;
+ return t.demanda===_navegacionId?1:0;
 }
-window.apmtDiagnostico={
- activar(){
-  _diagnosticoCargaActivo=true;
-  if(!_observadorCarga && typeof PerformanceObserver!=="undefined"){
-   try{_observadorCarga=new PerformanceObserver(lista=>lista.getEntries().forEach(e=>registrarCargaAPMT("tarea-larga",{inicio:e.startTime,ms:e.duration})));
-    _observadorCarga.observe({type:"longtask",buffered:false});
-   }catch{_observadorCarga?.disconnect();_observadorCarga=null;}
-  }
-  registrarCargaAPMT("diagnostico-inicio");return estadoCargaAPMT();
- },
- desactivar(){_diagnosticoCargaActivo=false;_observadorCarga?.disconnect();_observadorCarga=null;},
- estado:estadoCargaAPMT,
- exportar(){return {estado:estadoCargaAPMT(),eventos:[..._eventosCargaAPMT]};}
-};
-const _demandasDetalle=new Map(),_demandasResumen=new Map();
-const _oyentesRecursos=new Set();
+function promoverRecurso(clave,demanda){
+ _demandasRecursos.set(clave,Math.max(_demandasRecursos.get(clave)??-1,demanda));
+ const t=_colaRecursos.get(clave);if(t){t.demanda=_demandasRecursos.get(clave);despacharRecursos();}
+}
+function despacharRecursos(){
+ while(_recursosActivos<3){
+  const noUrgentes=[..._colaRecursos.values()].filter(t=>t.activa && prioridadRecurso(t)<2).length;
+  const t=[..._colaRecursos.values()].filter(t=>!t.activa && (prioridadRecurso(t)===2 || noUrgentes<2))
+   .sort((a,b)=>prioridadRecurso(b)-prioridadRecurso(a))[0];
+  if(!t)return;
+  t.activa=true;t.inicio=performance.now();_recursosActivos++;
+  const liberar=()=>{_colaRecursos.delete(t.clave);_recursosActivos--;};
+  Promise.resolve().then(t.operacion).then(valor=>{liberar();t.resolve(valor);despacharRecursos();},error=>{liberar();t.reject(error);despacharRecursos();});
+ }
+}
+function programarRecurso(clave,demanda,operacion){
+ promoverRecurso(clave,demanda);
+ const existente=_colaRecursos.get(clave);if(existente)return existente.promise;
+ let resolve,reject;const promise=new Promise((ok,fail)=>{resolve=ok;reject=fail;});
+ _colaRecursos.set(clave,{clave,demanda:_demandasRecursos.get(clave),operacion,promise,resolve,reject,activa:false,creada:performance.now()});
+ despacharRecursos();return promise;
+}
+async function esperarConjuntoRecursos(promesas){
+ const resultados=await Promise.allSettled(promesas),errores=resultados.filter(r=>r.status==="rejected").map(r=>r.reason);
+ if(errores.length)throw new AggregateError(errores,"No fue posible completar "+errores.length+" recurso(s).",{cause:errores[0]});
+ return resultados.map(r=>r.value);
+}
 function notificarRecursos(){_oyentesRecursos.forEach(fn=>{try{fn();}catch(error){console.error("[APMT] Progreso",error);}});}
+function recursosPeriodoListos(periodos=periodosNecesarios()){
+ return CONFIG.USAR_DATOS_DEMO || (periodos.length>0 && periodos.every(p=>RESUMENES_CARGADOS[p.anio+"-"+p.mes] && DETALLE_CACHE_POR_PERIODO[p.anio+"-"+p.mes]));
+}
+async function descargarRecurso(clave,url,timeoutMs,demanda){
+ for(let intento=1;intento<=2;intento++){
+  const medida={clave,intento,encolada:performance.now(),colaMs:null,redMs:null,cuerpoMs:null,jsonMs:null};
+  try{
+   const resultado=await programarRecurso(clave,_demandasRecursos.get(clave)??demanda,()=>{
+    medida.colaMs=performance.now()-medida.encolada;registrarCargaAPMT("solicitud-inicio",{clave,intento,colaMs:medida.colaMs});
+    return conTimeoutRecurso(timeoutMs,async signal=>{
+     const inicio=performance.now();const resp=await fetch(url,{signal});
+     medida.redMs=performance.now()-inicio;medida.status=resp.status;medida.redirigida=resp.redirected;
+     medida.dominio=resp.url?new URL(resp.url).hostname:null;
+     return leerRespuestaJson(resp,clave,medida);
+    });
+   });
+   registrarCargaAPMT("solicitud-fin",medida);_logTiming(JSON.stringify({recurso:clave,intento,colaMs:medida.colaMs,redMs:medida.redMs,cuerpoMs:medida.cuerpoMs,jsonMs:medida.jsonMs,status:medida.status}));
+   return resultado;
+  }catch(error){
+   registrarCargaAPMT("solicitud-error",{...medida,tipo:error.name,totalMs:performance.now()-medida.encolada});
+   if(intento===2)throw error;
+   await _esperarMs(800+Math.random()*400);
+  }
+ }
+}
+function progresoHistorico(periodos,campos){
+ let completados=0,total=0,resumenes=0,detalles=0,detallesNecesarios=0,meses=0;
+ periodos.forEach(p=>{
+  const clave=p.anio+"-"+p.mes,resumen=!!RESUMENES_CARGADOS[clave],detalle=!!DETALLE_CACHE_POR_PERIODO[clave];
+  total++;if(resumen){completados++;resumenes++;}
+  const necesitaDetalle=campos===null || (resumen && !resumenSuficienteComparativa(p,campos));
+  if(necesitaDetalle){total++;detallesNecesarios++;if(detalle){completados++;detalles++;}}
+  if(resumen && recursoComparativaCompleto(p,campos))meses++;
+ });
+ return {completados,total,texto:"RESUMEN: "+resumenes+" de "+periodos.length+" · DETALLE: "+detalles+" de "+detallesNecesarios+" · Meses preparados: "+meses+" de "+periodos.length};
+}
 let _vistasEnCarga=null,_renderPendiente=null;
 function restaurarVistasEnCarga(){
  if(!_vistasEnCarga)return;
@@ -2929,21 +2927,19 @@ function ocultarVistasEnCarga(contexto){
  vistas.forEach(([el])=>{el.style.visibility="hidden";});_vistasEnCarga={contexto,vistas};
 }
 function nuevaNavegacion(){
- ++_navegacionId;++_cargaPeriodoId;registrarCargaAPMT("navegacion-invalidada");restaurarVistasEnCarga();limpiarErrorPeriodo();mostrarCargaPeriodo(false);
+ ++_navegacionId;++_cargaPeriodoId;restaurarVistasEnCarga();limpiarErrorPeriodo();mostrarCargaPeriodo(false);
  if(_progresoPeriodoHome){_progresoPeriodoHome.control.cancelar();_progresoPeriodoHome.nodo.remove();_progresoPeriodoHome=null;}
 }
-async function esperarConjuntoRecursos(promesas){
- const resultados=await Promise.allSettled(promesas),errores=resultados.filter(r=>r.status==="rejected").map(r=>r.reason);
- if(errores.length)throw new AggregateError(errores,"No fue posible completar "+errores.length+" recurso(s).",{cause:errores[0]});
- return resultados.map(r=>r.value);
-}
-async function descargarJsonConReintento(url,contexto,timeoutMs,clave,demanda){
- for(let intento=1;intento<=2;intento++){
-  try{return await programarRecurso(clave,_demandasResumen.get(clave)??demanda,()=>conTimeoutRecurso(timeoutMs,async signal=>{
-   const resp=await fetch(url,{signal});return leerRespuestaJson(resp,contexto);
-  }));}catch(error){if(intento===2)throw error;await _esperarMs(800+Math.random()*400);}
- }
-}
+window.apmtDiagnostico={
+ activar(){_diagnosticoActivo=true;
+  if(!_observadorCarga && typeof PerformanceObserver!=="undefined")try{_observadorCarga=new PerformanceObserver(lista=>lista.getEntries().forEach(e=>registrarCargaAPMT("tarea-larga",{ms:e.duration})));_observadorCarga.observe({type:"longtask"});}catch{_observadorCarga=null;}
+ },
+ desactivar(){_diagnosticoActivo=false;_observadorCarga?.disconnect();_observadorCarga=null;},
+ exportar(){return {version:"APMT-recuperado-20261020",seleccion:{categoria:categoriaActual,anio:anioActual,mes:mesActual===null?null:mesActual+1},
+  activos:_recursosActivos,cola:[..._colaRecursos.values()].map(t=>({clave:t.clave,activa:t.activa,prioridad:prioridadRecurso(t),ms:performance.now()-(t.inicio??t.creada)})),
+  resumenes:Object.keys(RESUMENES_CARGADOS),detalles:Object.keys(DETALLE_CACHE_POR_PERIODO),vistaEnCarga:!!_vistasEnCarga,error:!!_errorPeriodo,eventos:[..._eventosCargaAPMT]};}
+};
+
 const _preparacionesHistoricas=new Map();
 let _preparacionEnPantalla=null;
 function camposHistoricosModulo(){
@@ -2965,7 +2961,7 @@ async function iniciarPreparacionHistorica({anio=anioActual,campos=null}={}){
   const existente=_preparacionesHistoricas.get(anio);
   if(existente){
     existente.campos=existente.campos===null || campos===null?null:Array.from(new Set([...existente.campos,...campos]));
-    mostrarPreparacionCompartida(existente);
+    mostrarPreparacionCompartida(existente);existente.actualizar?.();
     return existente.promise;
   }
   if(periodos.every(p=>recursoComparativaCompleto(p,campos)))return;
@@ -2973,18 +2969,18 @@ async function iniciarPreparacionHistorica({anio=anioActual,campos=null}={}){
   _preparacionesHistoricas.set(anio,estado);mostrarPreparacionCompartida(estado);
   const actualizar=()=>{
     if(_preparacionEnPantalla!==estado)return;
-    estado.progreso?.actualizar({completados:periodos.filter(p=>recursoComparativaCompleto(p,estado.campos)).length,total:periodos.length});
+    estado.progreso?.actualizar(progresoHistorico(periodos,estado.campos));
   };
-  _oyentesRecursos.add(actualizar);actualizar();
+  estado.actualizar=actualizar;_oyentesRecursos.add(actualizar);actualizar();
   estado.promise=(async()=>{
     try{
       let firma;
       do{
         firma=JSON.stringify(estado.campos);
         await asegurarComparativaMensual({anio,campos:estado.campos,onProgreso:actualizar});
+        if(firma===JSON.stringify(estado.campos) && _preparacionEnPantalla===estado)await estado.progreso?.finalizar();
       }while(firma!==JSON.stringify(estado.campos));
       if(_preparacionEnPantalla===estado){
-        await estado.progreso?.finalizar();
         if(_preparacionEnPantalla===estado && estado.nodo?.isConnected){
           estado.nodo.setAttribute("aria-busy","false");
           const reducido=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -3028,15 +3024,15 @@ const _resumenEnCurso = {};
 async function cargarResumenPeriodo(periodo,demanda=_navegacionId){
   const clave = periodo.anio+"-"+periodo.mes;
   if(RESUMENES_CARGADOS[clave]) return RESUMENES_CARGADOS[clave];
-  _demandasResumen.set("resumen:"+clave,Math.max(_demandasResumen.get("resumen:"+clave)??-1,demanda));
-  if(_resumenEnCurso[clave]){promoverRecurso("resumen:"+clave,demanda);return _resumenEnCurso[clave];}
+  promoverRecurso("resumen:"+clave,demanda);
+  if(_resumenEnCurso[clave]){despacharRecursos();return _resumenEnCurso[clave];}
   _resumenEnCurso[clave]=(async()=>{
-  const resumen = await descargarJsonConReintento(CONFIG.API_URL+"?vista=resumen&anio="+periodo.anio+"&mes="+periodo.mes+"&token="+encodeURIComponent(SESSION_TOKEN),"Resumen mensual",TIMEOUT_RESUMEN_MS,"resumen:"+clave,demanda);
+  const resumen = await descargarRecurso("resumen:"+clave,CONFIG.API_URL+"?vista=resumen&anio="+periodo.anio+"&mes="+periodo.mes+"&token="+encodeURIComponent(SESSION_TOKEN),TIMEOUT_RESUMEN_MS,demanda);
   if(!resumen || resumen.error || !Array.isArray(resumen.unidades)) throw new Error(resumen?.error||"Resumen del período incompleto.");
   RESUMENES_CARGADOS[clave] = resumen;notificarRecursos();
   return resumen;
   })();
-  try{return await _resumenEnCurso[clave];}finally{delete _resumenEnCurso[clave];_demandasResumen.delete("resumen:"+clave);}
+  try{return await _resumenEnCurso[clave];}finally{delete _resumenEnCurso[clave];_demandasRecursos.delete("resumen:"+clave);}
 }
 
 // Trae resumen.json de cada período SELECCIONADO (no de todos los que existan
@@ -3175,8 +3171,6 @@ function _mergerPeriodoEnData(detalleUnificado){
 
 // Tras guardar la flota, recupera solo las unidades que pasaron de inactivas
 // a activas. Los detalles originales no se modifican; el merge ya deduplica.
-// Cede al navegador entre unidades sin cambiar el merge ni su orden de llegada.
-// La cadena impide intercalar períodos que pudieran compartir claves de registros.
 let _consolidacionEnCurso=Promise.resolve();
 function consolidarPeriodoSinBloquear(detalle){
  const trabajo=_consolidacionEnCurso.then(async()=>{
@@ -3319,22 +3313,20 @@ function mostrarErrorPeriodo(){
  });
 }
 async function _cargarPeriodoSiHaceFalta(){
- if(_errorPeriodo && _errorPeriodo.contexto!==contextoComparativaMensual())limpiarErrorPeriodo();
-  const cargaId=_cargaPeriodoId,contexto=contextoComparativaMensual();
-  ocultarVistasEnCarga(contexto);
-  try{
-    if(categoriaActual==="inicio" && mesActual===null)await asegurarPeriodosCargados();
-    else if(categoriaActual==="inicio")await cargarPeriodoHomeConProgreso();
-    else await asegurarPeriodosCargados();
-    if(cargaId!==_cargaPeriodoId || contextoComparativaMensual()!==contexto)return false;
-    restaurarVistasEnCarga();limpiarErrorPeriodo();
-    if(categoriaActual==="inicio" && homeContextoGerencial().detalle)document.getElementById("viewInicio").style.visibility="";
-    return true;
-  }catch(error){
-    console.error("[APMT] No se pudo cargar el período activo",error);
-    if(cargaId===_cargaPeriodoId && contextoComparativaMensual()===contexto){restaurarVistasEnCarga();mostrarErrorPeriodo();}
-    return false;
-  }
+ const contexto=contextoComparativaMensual(),cargaId=_cargaPeriodoId;
+ if(_errorPeriodo && _errorPeriodo.contexto!==contexto)limpiarErrorPeriodo();
+ if(recursosPeriodoListos()){restaurarVistasEnCarga();limpiarErrorPeriodo();return true;}
+ ocultarVistasEnCarga(contexto);mostrarCargaPeriodo(true);
+ try{
+  if(categoriaActual==="inicio" && mesActual!==null)await cargarPeriodoHomeConProgreso();
+  else await asegurarPeriodosCargados();
+  if(cargaId!==_cargaPeriodoId || contextoComparativaMensual()!==contexto)return false;
+  restaurarVistasEnCarga();limpiarErrorPeriodo();return true;
+ }catch(error){
+  console.error("[APMT] No se pudo cargar el período activo",error);
+  if(cargaId===_cargaPeriodoId && contextoComparativaMensual()===contexto){restaurarVistasEnCarga();mostrarErrorPeriodo();}
+  return false;
+ }finally{if(cargaId===_cargaPeriodoId && contextoComparativaMensual()===contexto)mostrarCargaPeriodo(false);}
 }
 
 // Instrumentación local de tiempos (performance.now()), para diagnosticar
@@ -3361,40 +3353,9 @@ function _esperarMs(ms){ return new Promise(resolve=>setTimeout(resolve, ms)); }
 const REINTENTOS_DETALLE_MAX = 2;
 const ESPERA_REINTENTO_DETALLE_MS = 800;
 async function _fetchDetalleConReintento(periodo){
-  const clave=periodo.anio+"-"+periodo.mes;
-  const urlLogica = "vista=detalle&anio="+periodo.anio+"&mes="+periodo.mes; // sin token, solo para logs
-  let ultimoError = "Error desconocido";
-  for(let intento=1; intento<=REINTENTOS_DETALLE_MAX; intento++){
-    const _tP0=performance.now();
-    try{
-      return await programarRecurso("detalle:"+clave,_demandasDetalle.get(clave)??-1,()=>conTimeoutRecurso(TIMEOUT_DETALLE_MS,async signal=>{
-      const resp = await fetch(CONFIG.API_URL+"?vista=detalle&anio="+periodo.anio+"&mes="+periodo.mes+"&token="+encodeURIComponent(SESSION_TOKEN),{signal});
-      if(!resp.ok){
-        ultimoError = "HTTP "+resp.status;
-        console.warn("[APMT] Detalle mensual",{periodo:clave,intento,status:resp.status,redirected:resp.redirected,dominioFinal:resp.url?new URL(resp.url).hostname:null,contentType:resp.headers?.get?.("content-type")});
-        _logTiming(`${periodo.anio}-${periodo.mes} intento ${intento} HTTP ${resp.status} (${(performance.now()-_tP0).toFixed(1)}ms) [${urlLogica}]`);
-      } else {
-        try{
-          const json = await leerRespuestaJson(resp,"Detalle mensual");
-          _logTiming(`${periodo.anio}-${periodo.mes}: fetch+json en ${(performance.now()-_tP0).toFixed(1)}ms (intento ${intento})`);
-          return json; // incluye {error:"..."} FUNCIONALES del backend tal cual -- esos nunca se reintentan
-        }catch(parseErr){
-          ultimoError = "Respuesta no JSON (HTTP "+resp.status+")";
-          _logTiming(`${periodo.anio}-${periodo.mes} intento ${intento} respuesta no JSON, HTTP ${resp.status} (${(performance.now()-_tP0).toFixed(1)}ms) [${urlLogica}]`);
-        }
-      }
-      throw new Error(ultimoError);
-      }));
-    }catch(networkErr){
-      ultimoError = networkErr.name==="TimeoutError"?"Timeout: "+networkErr.message:networkErr.message;
-      _logTiming(`${periodo.anio}-${periodo.mes} intento ${intento} error de red: ${networkErr.message} (${(performance.now()-_tP0).toFixed(1)}ms) [${urlLogica}]`);
-    }
-    if(intento<REINTENTOS_DETALLE_MAX){
-      _logTiming(`${periodo.anio}-${periodo.mes} retry`);
-      await _esperarMs(ESPERA_REINTENTO_DETALLE_MS*intento+Math.random()*400);
-    }
-  }
-  return { error: ultimoError+" tras "+REINTENTOS_DETALLE_MAX+" intento(s) en "+urlLogica, _transitorio: true };
+ const clave="detalle:"+periodo.anio+"-"+periodo.mes;
+ try{return await descargarRecurso(clave,CONFIG.API_URL+"?vista=detalle&anio="+periodo.anio+"&mes="+periodo.mes+"&token="+encodeURIComponent(SESSION_TOKEN),TIMEOUT_DETALLE_MS,_demandasRecursos.get(clave)??-1);}
+ catch(error){return {error:error.message+" tras 2 intento(s) en vista=detalle&anio="+periodo.anio+"&mes="+periodo.mes,_transitorio:true};}
 }
 
 // Determina qué períodos (del catálogo PERIODOS_SELECCIONADOS) hacen falta
@@ -3443,7 +3404,6 @@ async function asegurarPeriodosCargados(periodos=null,actualizarUnidades=true,de
   const _tFetch0=performance.now();
   await esperarConjuntoRecursos(pendientes.map(periodo=>{
     const clave=claveDe(periodo);
-    _demandasDetalle.set(clave,Math.max(_demandasDetalle.get(clave)??-1,demanda));
     promoverRecurso("detalle:"+clave,demanda);
     if(!_detalleEnCurso[clave]){
       _detalleEnCurso[clave]=(async()=>{
@@ -3457,7 +3417,7 @@ async function asegurarPeriodosCargados(periodos=null,actualizarUnidades=true,de
         await consolidarPeriodoSinBloquear(detalle);
         DETALLE_CACHE_POR_PERIODO[clave]=detalle;notificarRecursos();
         return detalle;
-      })().finally(()=>{delete _detalleEnCurso[clave];_demandasDetalle.delete(clave);});
+      })().finally(()=>{delete _detalleEnCurso[clave];_demandasRecursos.delete("detalle:"+clave);});
     }
     return _detalleEnCurso[clave];
   }));
@@ -3765,7 +3725,6 @@ function buildAnioMesSelectors(){
   selA.addEventListener("change", async e=>{
     nuevaNavegacion();
     const miId = _cargaPeriodoId;
-    mostrarCargaPeriodo(true);
     try{
       anioActual=parseInt(e.target.value); poblarMesesParaAnio(); diaSeleccionado=null;
       if(!(await _cargarPeriodoSiHaceFalta())) return;
@@ -3778,7 +3737,6 @@ function buildAnioMesSelectors(){
   selM.addEventListener("change", async e=>{
     nuevaNavegacion();
     const miId = _cargaPeriodoId;
-    mostrarCargaPeriodo(true);
     try{
       mesActual = e.target.value===""? null : parseInt(e.target.value); diaSeleccionado=null;
       if(!(await _cargarPeriodoSiHaceFalta())) return;
@@ -3838,7 +3796,6 @@ function buildDiaSelector(){
     // tiene en curso.
     nuevaNavegacion();
     const miId = _cargaPeriodoId;
-    mostrarCargaPeriodo(true);
     try{
       diaSeleccionado = e.target.value===""? null : parseInt(e.target.value);
       if(miId!==_cargaPeriodoId) return;
@@ -3977,23 +3934,17 @@ function valorSegunMetrica(arr){
 }
 
 function render(){
- const inicioRenderAPMT=performance.now();registrarCargaAPMT("render-inicio",{categoria:categoriaActual});
- try{
  if(_errorPeriodo){
   if(_errorPeriodo.contexto===contextoComparativaMensual())return;
   limpiarErrorPeriodo();
  }
   if(!CONFIG.USAR_DATOS_DEMO && (!SESSION_TOKEN || !_indiceListo || !document.getElementById("screenApp").classList.contains("show")))return;
-  if(!CONFIG.USAR_DATOS_DEMO && !periodosNecesarios().every(p=>RESUMENES_CARGADOS[p.anio+"-"+p.mes] && DETALLE_CACHE_POR_PERIODO[p.anio+"-"+p.mes])){
+  if(!CONFIG.USAR_DATOS_DEMO && !recursosPeriodoListos()){
     const contexto=contextoComparativaMensual();
     if(_renderPendiente!==contexto){
-      _renderPendiente=contexto;mostrarCargaPeriodo(true);
-      _cargarPeriodoSiHaceFalta().then(ok=>{
-        if(ok && contextoComparativaMensual()===contexto){buildDiaSelector();render();}
-      }).catch(error=>{console.error("[APMT] Carga de vista",error);}).finally(()=>{
-        if(_renderPendiente===contexto)_renderPendiente=null;
-        if(contextoComparativaMensual()===contexto)mostrarCargaPeriodo(false);
-      });
+      _renderPendiente=contexto;
+      _cargarPeriodoSiHaceFalta().then(ok=>{if(ok && contextoComparativaMensual()===contexto){buildDiaSelector();render();}})
+      .catch(error=>console.error("[APMT] Carga de vista",error)).finally(()=>{if(_renderPendiente===contexto)_renderPendiente=null;});
     }
     return;
   }
@@ -4026,7 +3977,6 @@ function render(){
   if(categoriaActual!=="inicio")iniciarPreparacionHistorica({campos:camposHistoricosModulo()}).catch(()=>{});
   renderTicker();
   animarContenidoShell(document.querySelector(categoriaActual==="inicio"?"#viewInicio":"#screenApp .main"));
- }finally{registrarCargaAPMT("render-fin",{ms:performance.now()-inicioRenderAPMT});}
 }
 
 // Guarda defensiva contra ECharts recibiendo un valor inválido (la causa
@@ -4337,10 +4287,10 @@ function crearProgresoComparativa(el,contexto,{textoSecundario=null}={}){
   const nodo=el.querySelector(".monthly-preparation"),titulo=nodo.querySelector(".monthly-preparation-title"),
     cuenta=nodo.querySelector(".monthly-preparation-count"),barra=nodo.querySelector(".monthly-preparation-track"),relleno=barra.querySelector("span");
   const reducido=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let completados=0,total=1,visible=null,frame=null,ultimo=0,terminado=false,cancelado=false,resolver=null;
+  let descripcion=null,completados=0,total=1,visible=null,frame=null,ultimo=0,terminado=false,cancelado=false,resolver=null;
   const pintar=()=>{
     titulo.textContent=(terminado && visible===100?"Información preparada · ":"Preparando información · ")+visible+"%";
-    cuenta.textContent=textoSecundario || ("Cargando meses disponibles: "+completados+" de "+total);
+    cuenta.textContent=textoSecundario || descripcion || ("Cargando meses disponibles: "+completados+" de "+total);
     barra.setAttribute("aria-valuenow",String(Math.floor(completados/total*100)));
     relleno.style.width=visible+"%";
   };
@@ -4364,7 +4314,8 @@ function crearProgresoComparativa(el,contexto,{textoSecundario=null}={}){
   return {
     actualizar(datos){
       if(cancelado)return;
-      completados=datos.completados;total=datos.total;
+      if(terminado && datos.completados<datos.total){terminado=false;resolver?.();resolver=null;}
+      completados=datos.completados;total=datos.total;descripcion=datos.texto||null;
       visible=Math.min(99,Math.floor(completados/total*100));
       if(reducido)visible=Math.min(99,Math.floor(completados/total*100));
       pintar();arrancar();
