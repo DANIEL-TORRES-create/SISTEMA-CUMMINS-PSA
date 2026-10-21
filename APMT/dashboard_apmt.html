@@ -944,9 +944,13 @@ html, body { margin:0; padding:0; }
 #appRoot .trend-chart:has(> .monthly-preparation) {position:relative;}
 #appRoot .monthly-preparation {display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;padding:22px 16px;background:#F7F9FC;color:#243244;font-family:'IBM Plex Sans',sans-serif;text-align:center;white-space:normal;}
 #appRoot .trend-chart > .monthly-preparation {position:absolute;inset:0;z-index:20;}
-#appRoot .monthly-preparation-title {font-size:13px;font-weight:600;}
-#appRoot .monthly-preparation-count {font-size:11px;color:#526174;}
-#appRoot .monthly-preparation-track {width:min(240px,100%);height:3px;background:#DCE5EE;border-radius:2px;overflow:hidden;margin-top:4px;}
+#appRoot .monthly-preparation-title {display:flex;align-items:center;gap:8px;width:100%;font-size:12px;font-weight:500;text-align:left;}
+#appRoot .monthly-preparation-title::before {content:"";flex:0 0 12px;width:12px;height:12px;box-sizing:border-box;border:1.5px solid #DCE5EE;border-top-color:#2563AC;border-radius:50%;animation:apmtPreparationSpin 1s linear infinite;}
+#appRoot .monthly-preparation-percent {margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600;color:#526174;}
+@keyframes apmtPreparationSpin {to {transform:rotate(360deg);}}
+@media(prefers-reduced-motion:reduce){#appRoot .monthly-preparation-title::before {animation:none;}}
+#appRoot .monthly-preparation-count {display:none;}
+#appRoot .monthly-preparation-track {width:100%;height:3px;background:#DCE5EE;border-radius:2px;overflow:hidden;margin-top:4px;}
 #appRoot .monthly-preparation-track > span {display:block;height:100%;width:0;background:#2563AC;}
 #appRoot .monthly-preparation-error {font-size:12px;line-height:1.5;text-align:center;padding:18px;}
 @media(prefers-reduced-motion:reduce){#appRoot #screenApp.resumen-activo .gerencial-section {transition:none;}#appRoot #screenApp.resumen-activo .gerencial-section:hover {transform:none;}}
@@ -4277,7 +4281,7 @@ function limpiarComparativaFueraDeContexto(destino){
 // Las tablas se consultan al llegar al viewport, no por abrir una vista diaria.
 function crearProgresoComparativa(el,contexto,{textoSecundario=null}={}){
   const tabla=el.tagName==="TABLE";
-  const contenido='<div class="monthly-preparation"><div class="monthly-preparation-title" aria-live="off"></div><div class="monthly-preparation-count" role="status"></div><div class="monthly-preparation-track" role="progressbar" aria-label="Meses completados" aria-valuemin="0" aria-valuemax="100"><span></span></div></div>';
+  const contenido='<div class="monthly-preparation"><div class="monthly-preparation-title" aria-live="off"><span class="monthly-preparation-label"></span><span class="monthly-preparation-percent"></span></div><div class="monthly-preparation-count" role="status"></div><div class="monthly-preparation-track" role="progressbar" aria-label="Meses completados" aria-valuemin="0" aria-valuemax="100"><span></span></div></div>';
   if(tabla) el.innerHTML='<tr><td colspan="99">'+contenido+'</td></tr>';
   else {
     echarts.getInstanceByDom(el)?.hideLoading();
@@ -4289,9 +4293,10 @@ function crearProgresoComparativa(el,contexto,{textoSecundario=null}={}){
   const reducido=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let descripcion=null,completados=0,total=1,visible=null,frame=null,ultimo=0,terminado=false,cancelado=false,resolver=null;
   const pintar=()=>{
-    titulo.textContent=(terminado && visible===100?"Información preparada · ":"Preparando información · ")+visible+"%";
+    titulo.querySelector(".monthly-preparation-label").textContent=terminado && visible===100?"Información preparada":"Preparando información";
+    titulo.querySelector(".monthly-preparation-percent").textContent=visible+"%";
     cuenta.textContent=textoSecundario || descripcion || ("Cargando meses disponibles: "+completados+" de "+total);
-    barra.setAttribute("aria-valuenow",String(Math.floor(completados/total*100)));
+    barra.setAttribute("aria-valuenow",String(visible));
     relleno.style.width=visible+"%";
   };
   const objetivo=()=>terminado?100:Math.min(99,Math.floor(completados/total*100));
